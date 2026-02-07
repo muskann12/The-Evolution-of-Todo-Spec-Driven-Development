@@ -1,0 +1,1728 @@
+# Phase II Todo Application - Implementation Plan
+
+**Document Type:** Implementation Plan (HOW to build)
+**Phase:** II - Full-Stack Web Application
+**Version:** 1.0.0
+**Date:** 2026-01-01
+**Status:** Ready for Implementation
+
+---
+
+## 1. SYSTEM ARCHITECTURE
+
+### High-Level Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Browser                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │           Next.js Frontend (Vercel)                 │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │  Server Components (SSR)                    │   │   │
+│  │  │  - app/page.tsx (task list)                 │   │   │
+│  │  │  - app/login/page.tsx                       │   │   │
+│  │  │  - app/signup/page.tsx                      │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │  Client Components (React)                  │   │   │
+│  │  │  - TaskForm.tsx (forms)                     │   │   │
+│  │  │  - TaskItem.tsx (interactive)               │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │  Better Auth (JWT)                          │   │   │
+│  │  │  - /api/auth/[...route]/route.ts            │   │   │
+│  │  │  - httpOnly cookies                         │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │  API Client (/lib/api.ts)                   │   │   │
+│  │  │  - Auto JWT injection                       │   │   │
+│  │  │  - Error handling                           │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
+│  └────────────────┬────────────────────────────────────┘   │
+└───────────────────┼─────────────────────────────────────────┘
+                    │
+                    │ HTTPS + JWT in Cookie
+                    │ (Authorization: Bearer <token>)
+                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│           FastAPI Backend (Railway/Render)                  │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  JWT Verification Middleware                        │   │
+│  │  - Extract token from Authorization header         │   │
+│  │  - Verify signature with BETTER_AUTH_SECRET        │   │
+│  │  - Extract user_id from 'sub' claim                │   │
+│  └────────────────┬────────────────────────────────────┘   │
+│                   ▼                                         │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Task CRUD Endpoints (routes/tasks.py)             │   │
+│  │  - GET    /api/{user_id}/tasks                     │   │
+│  │  - POST   /api/{user_id}/tasks                     │   │
+│  │  - GET    /api/{user_id}/tasks/{id}                │   │
+│  │  - PUT    /api/{user_id}/tasks/{id}                │   │
+│  │  - DELETE /api/{user_id}/tasks/{id}                │   │
+│  │  - PATCH  /api/{user_id}/tasks/{id}/complete       │   │
+│  └────────────────┬────────────────────────────────────┘   │
+│                   ▼                                         │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  SQLModel ORM + Pydantic Validation                │   │
+│  │  - models.py (Task model)                          │   │
+│  │  - schemas.py (request/response validation)        │   │
+│  └────────────────┬────────────────────────────────────┘   │
+└───────────────────┼─────────────────────────────────────────┘
+                    │
+                    │ asyncpg
+                    │ (PostgreSQL Wire Protocol)
+                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Neon PostgreSQL (Cloud)                        │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Tables:                                            │   │
+│  │  ┌──────────────────────────────────────────────┐  │   │
+│  │  │  users                                       │  │   │
+│  │  │  - id (VARCHAR PK)                           │  │   │
+│  │  │  - email (VARCHAR UNIQUE)                    │  │   │
+│  │  │  - name (VARCHAR)                            │  │   │
+│  │  │  - hashed_password (VARCHAR)                 │  │   │
+│  │  │  - created_at (TIMESTAMP)                    │  │   │
+│  │  └──────────────────────────────────────────────┘  │   │
+│  │                                                     │   │
+│  │  ┌──────────────────────────────────────────────┐  │   │
+│  │  │  tasks                                       │  │   │
+│  │  │  - id (INTEGER PK AUTOINCREMENT)             │  │   │
+│  │  │  - user_id (VARCHAR FK → users.id)           │  │   │
+│  │  │  - title (VARCHAR 200)                       │  │   │
+│  │  │  - description (VARCHAR 1000)                │  │   │
+│  │  │  - completed (BOOLEAN)                       │  │   │
+│  │  │  - created_at (TIMESTAMP)                    │  │   │
+│  │  │  - updated_at (TIMESTAMP)                    │  │   │
+│  │  └──────────────────────────────────────────────┘  │   │
+│  │                                                     │   │
+│  │  Indexes:                                           │   │
+│  │  - idx_users_email (UNIQUE)                         │   │
+│  │  - idx_tasks_user_id                                │   │
+│  │  - idx_tasks_completed                              │   │
+│  │  - idx_tasks_created_at                             │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
+**1. Authentication Flow:**
+```
+User → Login Form → Better Auth → JWT Generated → httpOnly Cookie → Browser
+```
+
+**2. Create Task Flow:**
+```
+User → TaskForm → API Client → POST /api/{user_id}/tasks
+                                ↓
+                        JWT Middleware (verify)
+                                ↓
+                        Validate user_id match
+                                ↓
+                        SQLModel Insert
+                                ↓
+                        PostgreSQL (Neon)
+                                ↓
+                        Return Task Object
+                                ↓
+                        Update UI (React)
+```
+
+**3. List Tasks Flow:**
+```
+User → Page Load → GET /api/{user_id}/tasks?status=all
+                        ↓
+                JWT Middleware (verify)
+                        ↓
+                Filter by user_id
+                        ↓
+                SQLModel Query
+                        ↓
+                PostgreSQL (Neon)
+                        ↓
+                Return Task[]
+                        ↓
+                Render TaskList
+```
+
+---
+
+## 2. COMPONENT BREAKDOWN
+
+### Frontend Components (Next.js)
+
+#### App Router Structure
+```
+frontend/src/app/
+├── layout.tsx                 # Root layout with providers
+│   - AuthProvider (Better Auth context)
+│   - Tailwind CSS imports
+│   - Metadata configuration
+│
+├── page.tsx                   # Home page (task list)
+│   - Server Component (default)
+│   - Fetches tasks on server
+│   - Renders TaskList component
+│
+├── login/
+│   └── page.tsx               # Login page
+│       - LoginForm component
+│       - Redirect to /tasks on success
+│
+├── signup/
+│   └── page.tsx               # Signup page
+│       - SignupForm component
+│       - Redirect to /tasks on success
+│
+└── api/
+    └── auth/
+        └── [...route]/
+            └── route.ts       # Better Auth API routes
+                - Handles signup, login, logout
+                - JWT token generation
+                - Cookie management
+```
+
+#### Component Library
+```
+frontend/src/components/
+├── Header.tsx                 # App header
+│   Props: { user?: User }
+│   Features:
+│   - App title/logo
+│   - User menu (name, logout)
+│   - Responsive mobile menu
+│   Type: Client Component ('use client')
+│
+├── TaskList.tsx               # List of tasks
+│   Props: { initialTasks: Task[], userId: string }
+│   Features:
+│   - Filter tabs (All, Pending, Completed)
+│   - Empty state message
+│   - Task count display
+│   - Renders TaskItem for each task
+│   Type: Client Component (state management)
+│
+├── TaskItem.tsx               # Individual task card
+│   Props: { task: Task, onUpdate, onDelete }
+│   Features:
+│   - Checkbox for completion toggle
+│   - Title and description display
+│   - Edit/Delete buttons
+│   - Inline editing mode
+│   - Optimistic updates
+│   Type: Client Component (interactive)
+│
+├── TaskForm.tsx               # Add/Edit task form
+│   Props: { userId: string, task?: Task, onSubmit, onCancel }
+│   Features:
+│   - Title input (required, max 200)
+│   - Description textarea (optional, max 1000)
+│   - Character count display
+│   - Validation feedback
+│   - Submit/Cancel buttons
+│   Type: Client Component (form state)
+│
+├── LoginForm.tsx              # Login form
+│   Props: { onSuccess?: () => void }
+│   Features:
+│   - Email input (validation)
+│   - Password input (masked)
+│   - Submit button (loading state)
+│   - Error message display
+│   - Link to signup page
+│   Type: Client Component (form handling)
+│
+└── SignupForm.tsx             # Signup form
+    Props: { onSuccess?: () => void }
+    Features:
+    - Name input (2-100 chars)
+    - Email input (validation)
+    - Password input (min 8 chars)
+    - Submit button (loading state)
+    - Error message display
+    - Link to login page
+    Type: Client Component (form handling)
+```
+
+#### Library Code
+```
+frontend/src/lib/
+├── api.ts                     # API client
+│   Functions:
+│   - getTasks(userId, status?)
+│   - getTask(userId, taskId)
+│   - createTask(userId, data)
+│   - updateTask(userId, taskId, data)
+│   - deleteTask(userId, taskId)
+│   - toggleComplete(userId, taskId)
+│   Features:
+│   - Automatic JWT injection from cookie
+│   - Error handling (401 → logout, 403 → error, etc.)
+│   - TypeScript types for all requests/responses
+│
+├── auth.ts                    # Better Auth configuration
+│   Exports:
+│   - auth client instance
+│   - JWT plugin configuration
+│   - Session helpers (getUser, logout)
+│
+└── types.ts                   # TypeScript types
+    Types:
+    - User { id, email, name, created_at }
+    - Task { id, user_id, title, description, completed, created_at, updated_at }
+    - TaskCreate { title, description? }
+    - TaskUpdate { title?, description?, completed? }
+    - ApiError { detail: string }
+```
+
+---
+
+### Backend Components (FastAPI)
+
+#### Project Structure
+```
+backend/
+├── main.py                    # FastAPI app entry point
+│   Features:
+│   - App initialization
+│   - CORS middleware
+│   - Lifespan context manager (DB connection)
+│   - Router registration
+│   - Health check endpoint
+│
+├── models.py                  # SQLModel database models
+│   Models:
+│   - User (Better Auth managed)
+│   - Task (application model)
+│
+├── schemas.py                 # Pydantic request/response schemas
+│   Schemas:
+│   - TaskCreate (request)
+│   - TaskUpdate (request)
+│   - TaskResponse (response)
+│   - ErrorResponse (error)
+│
+├── db.py                      # Database connection
+│   Functions:
+│   - create_async_engine()
+│   - get_db() dependency
+│   - AsyncSession management
+│
+├── config.py                  # Environment configuration
+│   Settings:
+│   - DATABASE_URL
+│   - BETTER_AUTH_SECRET
+│   - CORS_ORIGINS
+│   - DEBUG mode
+│
+├── middleware/
+│   └── auth.py                # JWT verification middleware
+│       Functions:
+│       - verify_jwt() dependency
+│       - Extract user_id from token
+│
+└── routes/
+    └── tasks.py               # Task CRUD endpoints
+        Endpoints:
+        - list_tasks()
+        - create_task()
+        - get_task()
+        - update_task()
+        - delete_task()
+        - toggle_complete()
+```
+
+---
+
+## 3. DATABASE MODELS
+
+### User Model (SQLModel)
+
+**File:** `backend/models.py`
+
+```python
+from datetime import datetime
+from typing import Optional
+from sqlmodel import Field, SQLModel, Relationship
+
+
+class User(SQLModel, table=True):
+    """User model for authentication (Better Auth managed)."""
+
+    __tablename__ = "users"
+
+    id: str = Field(primary_key=True)  # UUID string
+    email: str = Field(unique=True, index=True, max_length=255)
+    name: str = Field(max_length=100)
+    hashed_password: str = Field(max_length=255)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    tasks: list["Task"] = Relationship(back_populates="user", cascade_delete=True)
+```
+
+**Notes:**
+- Better Auth manages user creation and password hashing
+- Application only reads from this table
+- Cascade delete ensures tasks are removed when user is deleted
+
+---
+
+### Task Model (SQLModel)
+
+**File:** `backend/models.py`
+
+```python
+class Task(SQLModel, table=True):
+    """Task model for todo items."""
+
+    __tablename__ = "tasks"
+
+    # Primary key (auto-increment)
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # Foreign key to users
+    user_id: str = Field(foreign_key="users.id", index=True)
+
+    # Task data
+    title: str = Field(max_length=200)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    completed: bool = Field(default=False, index=True)
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    user: User = Relationship(back_populates="tasks")
+```
+
+**Indexes:**
+- `user_id` - For filtering tasks by user (performance)
+- `completed` - For filtering by completion status
+- `created_at` - For sorting by date
+
+**Constraints:**
+- `user_id` must reference valid user (foreign key)
+- `title` cannot be NULL
+- `title` max 200 characters
+- `description` max 1000 characters
+
+---
+
+### Pydantic Schemas
+
+**File:** `backend/schemas.py`
+
+```python
+from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel, Field, validator
+
+
+class TaskCreate(BaseModel):
+    """Schema for creating a new task."""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+
+    @validator('title')
+    def title_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Title cannot be empty')
+        return v.strip()
+
+
+class TaskUpdate(BaseModel):
+    """Schema for updating an existing task."""
+
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    completed: Optional[bool] = None
+
+    @validator('title')
+    def title_must_not_be_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Title cannot be empty')
+        return v.strip() if v else None
+
+
+class TaskResponse(BaseModel):
+    """Schema for task response."""
+
+    id: int
+    user_id: str
+    title: str
+    description: Optional[str]
+    completed: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+```
+
+---
+
+## 4. API ENDPOINTS
+
+### Endpoint 1: List Tasks
+
+**Method:** `GET`
+**Path:** `/api/{user_id}/tasks`
+**Query Params:** `status` (optional): "all" | "pending" | "completed"
+**Response:** `200 OK`, Array of Task objects
+**Errors:** `401 Unauthorized`, `403 Forbidden`
+
+**Implementation:**
+
+```python
+@router.get("", response_model=List[TaskResponse])
+async def list_tasks(
+    user_id: str,
+    status: str = "all",
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all tasks for the authenticated user."""
+
+    # Authorization check
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Build query
+    query = select(Task).where(Task.user_id == user_id)
+
+    # Apply status filter
+    if status == "pending":
+        query = query.where(Task.completed == False)
+    elif status == "completed":
+        query = query.where(Task.completed == True)
+
+    # Order by newest first
+    query = query.order_by(Task.created_at.desc())
+
+    # Execute query
+    result = await db.execute(query)
+    tasks = result.scalars().all()
+
+    return tasks
+```
+
+---
+
+### Endpoint 2: Create Task
+
+**Method:** `POST`
+**Path:** `/api/{user_id}/tasks`
+**Request Body:** `{"title": string, "description"?: string}`
+**Response:** `201 Created`, Task object
+**Errors:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`
+
+**Implementation:**
+
+```python
+@router.post("", response_model=TaskResponse, status_code=201)
+async def create_task(
+    user_id: str,
+    task_data: TaskCreate,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new task for the authenticated user."""
+
+    # Authorization check
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Create task
+    task = Task(
+        user_id=user_id,
+        title=task_data.title,
+        description=task_data.description,
+        completed=False
+    )
+
+    db.add(task)
+    await db.commit()
+    await db.refresh(task)
+
+    return task
+```
+
+---
+
+### Endpoint 3: Get Task
+
+**Method:** `GET`
+**Path:** `/api/{user_id}/tasks/{id}`
+**Response:** `200 OK`, Task object
+**Errors:** `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
+
+**Implementation:**
+
+```python
+@router.get("/{task_id}", response_model=TaskResponse)
+async def get_task(
+    user_id: str,
+    task_id: int,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a specific task by ID."""
+
+    # Authorization check
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Query task
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return task
+```
+
+---
+
+### Endpoint 4: Update Task
+
+**Method:** `PUT`
+**Path:** `/api/{user_id}/tasks/{id}`
+**Request Body:** `{"title"?: string, "description"?: string, "completed"?: boolean}`
+**Response:** `200 OK`, Task object
+**Errors:** `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
+
+**Implementation:**
+
+```python
+@router.put("/{task_id}", response_model=TaskResponse)
+async def update_task(
+    user_id: str,
+    task_id: int,
+    task_data: TaskUpdate,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing task."""
+
+    # Authorization check
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Find task
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Update fields
+    if task_data.title is not None:
+        task.title = task_data.title
+    if task_data.description is not None:
+        task.description = task_data.description
+    if task_data.completed is not None:
+        task.completed = task_data.completed
+
+    # Update timestamp
+    task.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(task)
+
+    return task
+```
+
+---
+
+### Endpoint 5: Delete Task
+
+**Method:** `DELETE`
+**Path:** `/api/{user_id}/tasks/{id}`
+**Response:** `200 OK`, `{"message": "Task deleted"}`
+**Errors:** `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
+
+**Implementation:**
+
+```python
+@router.delete("/{task_id}")
+async def delete_task(
+    user_id: str,
+    task_id: int,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a task."""
+
+    # Authorization check
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Find task
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Delete task
+    await db.delete(task)
+    await db.commit()
+
+    return {"message": "Task deleted"}
+```
+
+---
+
+### Endpoint 6: Toggle Complete
+
+**Method:** `PATCH`
+**Path:** `/api/{user_id}/tasks/{id}/complete`
+**Response:** `200 OK`, Task object
+**Errors:** `401 Unauthorized`, `403 Forbidden`, `404 Not Found`
+
+**Implementation:**
+
+```python
+@router.patch("/{task_id}/complete", response_model=TaskResponse)
+async def toggle_complete(
+    user_id: str,
+    task_id: int,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    """Toggle task completion status."""
+
+    # Authorization check
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Find task
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Toggle completion
+    task.completed = not task.completed
+    task.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(task)
+
+    return task
+```
+
+---
+
+## 5. AUTHENTICATION FLOW
+
+### Better Auth + JWT Flow
+
+**1. User Signup/Login:**
+```
+User → LoginForm → POST /api/auth/login
+                        ↓
+                Better Auth validates credentials
+                        ↓
+                Password hash comparison (bcrypt)
+                        ↓
+                JWT token generated
+                        Payload: {
+                          sub: user_id,
+                          email: user@example.com,
+                          name: User Name,
+                          iat: timestamp,
+                          exp: timestamp + 7 days
+                        }
+                        Signature: HMAC-SHA256(BETTER_AUTH_SECRET)
+                        ↓
+                Token stored in httpOnly cookie
+                        Cookie attributes: {
+                          httpOnly: true,
+                          sameSite: 'strict',
+                          secure: true (production),
+                          maxAge: 7 days
+                        }
+                        ↓
+                User redirected to /tasks
+```
+
+**2. API Request with JWT:**
+```
+Browser → GET /api/{user_id}/tasks
+          Cookie: token=<jwt>
+                ↓
+          FastAPI Backend
+                ↓
+          JWT Middleware: verify_jwt()
+                ↓
+          Extract Authorization header
+          OR extract from cookie (if configured)
+                ↓
+          Decode JWT with BETTER_AUTH_SECRET
+                ↓
+          Verify signature (HMAC-SHA256)
+                ↓
+          Check expiry (exp claim)
+                ↓
+          Extract user_id from 'sub' claim
+                ↓
+          Return user_id to endpoint
+                ↓
+          Endpoint: Verify user_id matches URL
+                ↓
+          Query database filtered by user_id
+                ↓
+          Return response
+```
+
+**3. Authorization Check:**
+```python
+# In every endpoint
+current_user = Depends(verify_jwt)  # user_id from token
+user_id = path_parameter             # user_id from URL
+
+if current_user != user_id:
+    raise HTTPException(status_code=403, detail="Forbidden")
+
+# Only proceed if match
+```
+
+### JWT Token Structure
+
+```json
+{
+  "header": {
+    "alg": "HS256",
+    "typ": "JWT"
+  },
+  "payload": {
+    "sub": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "user@example.com",
+    "name": "User Name",
+    "iat": 1735689600,
+    "exp": 1736294400
+  },
+  "signature": "HMAC-SHA256(header + payload, BETTER_AUTH_SECRET)"
+}
+```
+
+**Claims Explanation:**
+- `sub` (subject): User ID (UUID string)
+- `email`: User's email address
+- `name`: User's display name
+- `iat` (issued at): Token creation timestamp
+- `exp` (expiry): Token expiration timestamp (7 days)
+
+---
+
+## 6. FRONTEND IMPLEMENTATION
+
+### Better Auth Setup
+
+**Installation:**
+```bash
+cd frontend
+npm install better-auth
+```
+
+**Configuration:**
+
+**File:** `lib/auth.ts`
+```typescript
+import { createAuthClient } from 'better-auth'
+
+export const authClient = createAuthClient({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  plugins: {
+    jwt: {
+      secret: process.env.BETTER_AUTH_SECRET!,
+      expiresIn: '7d',
+      cookieOptions: {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  }
+})
+
+export async function getUser() {
+  const session = await authClient.getSession()
+  return session?.user
+}
+
+export async function logout() {
+  await authClient.signOut()
+}
+```
+
+**API Routes:**
+
+**File:** `app/api/auth/[...route]/route.ts`
+```typescript
+import { authClient } from '@/lib/auth'
+
+export const { GET, POST } = authClient.handler()
+```
+
+---
+
+### API Client Pattern
+
+**File:** `lib/api.ts`
+
+```typescript
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  const response = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    credentials: 'include', // Send cookies
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+  if (response.status === 401) {
+    // Unauthorized - redirect to login
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'API error')
+  }
+
+  return response
+}
+
+export const api = {
+  async getTasks(userId: string, status?: string): Promise<Task[]> {
+    const query = status ? `?status=${status}` : ''
+    const response = await fetchWithAuth(`/api/${userId}/tasks${query}`)
+    return response.json()
+  },
+
+  async getTask(userId: string, taskId: number): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks/${taskId}`)
+    return response.json()
+  },
+
+  async createTask(userId: string, data: TaskCreate): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return response.json()
+  },
+
+  async updateTask(userId: string, taskId: number, data: TaskUpdate): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+    return response.json()
+  },
+
+  async deleteTask(userId: string, taskId: number): Promise<void> {
+    await fetchWithAuth(`/api/${userId}/tasks/${taskId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async toggleComplete(userId: string, taskId: number): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks/${taskId}/complete`, {
+      method: 'PATCH',
+    })
+    return response.json()
+  },
+}
+```
+
+---
+
+### Component Patterns
+
+**Server Component (Default):**
+
+```typescript
+// app/page.tsx
+import { getUser } from '@/lib/auth'
+import { api } from '@/lib/api'
+import { redirect } from 'next/navigation'
+import TaskList from '@/components/TaskList'
+
+export default async function HomePage() {
+  const user = await getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const tasks = await api.getTasks(user.id)
+
+  return (
+    <div>
+      <h1>My Tasks</h1>
+      <TaskList initialTasks={tasks} userId={user.id} />
+    </div>
+  )
+}
+```
+
+**Client Component (Interactive):**
+
+```typescript
+// components/TaskItem.tsx
+'use client'
+
+import { useState } from 'react'
+import { api } from '@/lib/api'
+import type { Task } from '@/lib/types'
+
+interface Props {
+  task: Task
+  userId: string
+  onUpdate: (task: Task) => void
+  onDelete: (taskId: number) => void
+}
+
+export default function TaskItem({ task, userId, onUpdate, onDelete }: Props) {
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleToggle() {
+    setIsLoading(true)
+    try {
+      const updated = await api.toggleComplete(userId, task.id)
+      onUpdate(updated)
+    } catch (error) {
+      console.error('Failed to toggle task:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Are you sure you want to delete this task?')) return
+
+    setIsLoading(true)
+    try {
+      await api.deleteTask(userId, task.id)
+      onDelete(task.id)
+    } catch (error) {
+      console.error('Failed to delete task:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-4 p-4 border rounded">
+      <input
+        type="checkbox"
+        checked={task.completed}
+        onChange={handleToggle}
+        disabled={isLoading}
+        className="w-5 h-5"
+      />
+      <div className="flex-1">
+        <h3 className={task.completed ? 'line-through' : ''}>
+          {task.title}
+        </h3>
+        {task.description && (
+          <p className="text-sm text-gray-600">{task.description}</p>
+        )}
+      </div>
+      <button
+        onClick={handleDelete}
+        disabled={isLoading}
+        className="text-red-600 hover:text-red-800"
+      >
+        Delete
+      </button>
+    </div>
+  )
+}
+```
+
+---
+
+## 7. BACKEND IMPLEMENTATION
+
+### JWT Verification Middleware
+
+**File:** `middleware/auth.py`
+
+```python
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from config import settings
+
+security = HTTPBearer()
+
+async def verify_jwt(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> str:
+    """
+    Verify JWT token and extract user_id.
+
+    Args:
+        credentials: HTTP Bearer token from Authorization header
+
+    Returns:
+        user_id: UUID string from token 'sub' claim
+
+    Raises:
+        HTTPException: 401 if token invalid or expired
+    """
+    token = credentials.credentials
+
+    try:
+        # Decode and verify token
+        payload = jwt.decode(
+            token,
+            settings.BETTER_AUTH_SECRET,
+            algorithms=["HS256"]
+        )
+
+        # Extract user_id from 'sub' claim
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token: missing user ID"
+            )
+
+        return user_id
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+```
+
+---
+
+### Database Connection
+
+**File:** `db.py`
+
+```python
+from sqlmodel import create_engine, Session
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import sessionmaker
+from config import settings
+
+# Create async engine
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_pre_ping=True,  # Test connections before use
+    pool_size=10,        # Connection pool size
+    max_overflow=20,     # Max connections beyond pool_size
+    pool_timeout=30      # Timeout for getting connection
+)
+
+# Create async session maker
+async_session = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+async def get_db() -> AsyncSession:
+    """
+    Dependency that provides database session.
+
+    Yields:
+        AsyncSession: Database session
+
+    Ensures session is closed and committed/rolled back.
+    """
+    async with async_session() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+```
+
+---
+
+### FastAPI App Setup
+
+**File:** `main.py`
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from config import settings
+from routes import tasks
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for app startup/shutdown."""
+    # Startup: Create tables if needed
+    # (In production, use Alembic migrations instead)
+    print("Starting up...")
+    yield
+    # Shutdown: Close connections
+    print("Shutting down...")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Todo API",
+    version="2.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register routers
+app.include_router(
+    tasks.router,
+    prefix="/api/{user_id}/tasks",
+    tags=["tasks"]
+)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+```
+
+---
+
+## 8. DATABASE CONNECTION
+
+### Neon Setup
+
+**1. Create Neon Project:**
+- Visit https://neon.tech
+- Sign up/log in
+- Click "Create Project"
+- Name: "todo-app-phase-ii"
+- Region: Select closest to your users
+- PostgreSQL version: 16 (latest)
+
+**2. Get Connection String:**
+- Click "Connection Details"
+- Copy connection string
+- Format: `postgresql://user:pass@host/db?sslmode=require`
+- Convert to asyncpg format: `postgresql+asyncpg://user:pass@host/db?sslmode=require`
+
+**3. Set Environment Variable:**
+
+**Backend `.env`:**
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@ep-cool-name-123456.us-east-1.aws.neon.tech/neondb?sslmode=require
+BETTER_AUTH_SECRET=your-32-character-secret-key-here
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+DEBUG=True
+```
+
+**4. Test Connection:**
+```python
+# test_connection.py
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def test():
+    engine = create_async_engine("postgresql+asyncpg://...")
+    async with engine.connect() as conn:
+        result = await conn.execute("SELECT version()")
+        print(result.scalar())
+
+asyncio.run(test())
+```
+
+---
+
+### Connection Pooling
+
+**Configuration:**
+
+```python
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=DEBUG,                 # Log SQL queries (dev only)
+    pool_pre_ping=True,         # Test connections before use
+    pool_size=10,               # Base pool size
+    max_overflow=20,            # Additional connections allowed
+    pool_timeout=30,            # Timeout for getting connection (seconds)
+    pool_recycle=3600,          # Recycle connections after 1 hour
+)
+```
+
+**Benefits:**
+- Reuses connections (faster than creating new ones)
+- Handles connection failures gracefully
+- Scales to handle concurrent requests
+- Neon supports up to 100 connections per database
+
+---
+
+## 9. DEPLOYMENT ARCHITECTURE
+
+### Frontend Deployment (Vercel)
+
+**1. Connect GitHub Repository:**
+- Go to https://vercel.com
+- Click "New Project"
+- Import Git Repository
+- Select `todo-app` repository
+
+**2. Configure Build:**
+- Framework Preset: Next.js
+- Root Directory: `frontend`
+- Build Command: `npm run build`
+- Output Directory: `.next`
+- Install Command: `npm install`
+
+**3. Environment Variables:**
+```
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+BETTER_AUTH_SECRET=your-32-character-secret-key-here
+NODE_ENV=production
+```
+
+**4. Deploy:**
+- Click "Deploy"
+- Vercel auto-deploys on every push to `main`
+- Preview deployments for pull requests
+
+**5. Custom Domain (Optional):**
+- Add domain in Vercel dashboard
+- Configure DNS records
+- SSL certificate auto-provisioned
+
+---
+
+### Backend Deployment (Railway)
+
+**1. Create New Project:**
+- Go to https://railway.app
+- Click "New Project"
+- Select "Deploy from GitHub repo"
+- Choose `todo-app` repository
+
+**2. Configure Service:**
+- Root Directory: `backend`
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Language: Python 3.13
+
+**3. Environment Variables:**
+```
+DATABASE_URL=postgresql+asyncpg://...
+BETTER_AUTH_SECRET=your-32-character-secret-key-here
+CORS_ORIGINS=https://yourdomain.vercel.app
+DEBUG=False
+PORT=8000
+```
+
+**4. Deploy:**
+- Railway auto-deploys on push to `main`
+- Generates public URL: `https://todo-api-production.up.railway.app`
+
+**Alternative: Render**
+- Similar to Railway
+- Free tier available
+- Good performance for small apps
+
+---
+
+### Database Deployment (Neon)
+
+**Already Deployed:**
+- Neon is serverless PostgreSQL
+- No deployment needed
+- Connection string provided on creation
+- Automatic backups
+- Auto-scaling connections
+
+**Production Settings:**
+- Enable connection pooling
+- Set up read replicas (optional)
+- Configure backup retention
+- Monitor query performance
+
+---
+
+## 10. DEVELOPMENT WORKFLOW
+
+### Local Development Setup
+
+**Prerequisites:**
+- Node.js 18+ installed
+- Python 3.13+ installed
+- UV package manager installed
+- Git installed
+
+**Setup Steps:**
+
+```bash
+# 1. Clone repository
+git clone https://github.com/yourusername/todo-app.git
+cd todo-app/phase-2-web-app
+
+# 2. Setup frontend
+cd frontend
+npm install
+cp .env.example .env.local
+# Edit .env.local with your values
+npm run dev  # http://localhost:3000
+
+# 3. Setup backend (in new terminal)
+cd backend
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your values
+uvicorn main:app --reload  # http://localhost:8000
+
+# 4. Database (Neon cloud - no local setup)
+# Just use connection string from Neon dashboard
+```
+
+**Environment Files:**
+
+**Frontend `.env.local`:**
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+BETTER_AUTH_SECRET=your-32-character-secret-key-here
+```
+
+**Backend `.env`:**
+```bash
+DATABASE_URL=postgresql+asyncpg://user:pass@host/db
+BETTER_AUTH_SECRET=your-32-character-secret-key-here
+CORS_ORIGINS=http://localhost:3000
+DEBUG=True
+```
+
+---
+
+### Testing Strategy
+
+**Backend Tests (pytest):**
+
+```bash
+cd backend
+uv run pytest
+
+# With coverage
+uv run pytest --cov=. --cov-report=html
+
+# Specific test file
+uv run pytest tests/test_tasks.py
+
+# Verbose output
+uv run pytest -v
+```
+
+**Test Structure:**
+```
+backend/tests/
+├── __init__.py
+├── conftest.py              # Fixtures
+├── test_models.py           # SQLModel tests
+├── test_auth.py             # JWT verification tests
+├── test_tasks.py            # Task endpoint tests
+└── test_integration.py      # End-to-end tests
+```
+
+**Frontend Tests (Jest):**
+
+```bash
+cd frontend
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Coverage
+npm run test:coverage
+```
+
+**Test Structure:**
+```
+frontend/__tests__/
+├── components/
+│   ├── TaskItem.test.tsx
+│   ├── TaskList.test.tsx
+│   └── TaskForm.test.tsx
+├── lib/
+│   └── api.test.ts
+└── integration/
+    └── auth-flow.test.tsx
+```
+
+---
+
+## 11. SECURITY IMPLEMENTATION
+
+### CORS Configuration
+
+**Backend (FastAPI):**
+
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",          # Development
+        "https://yourdomain.vercel.app"   # Production
+    ],
+    allow_credentials=True,  # Required for cookies
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["*"],
+)
+```
+
+**Why Credentials?**
+- Frontend sends cookies with requests
+- `credentials: 'include'` in fetch requires backend to allow
+
+---
+
+### Environment Variables
+
+**Shared Across Frontend and Backend:**
+
+```bash
+BETTER_AUTH_SECRET=your-minimum-32-character-secret-key-here-use-openssl-rand-hex-32
+```
+
+**Critical Security Rules:**
+1. **Same secret** in both frontend and backend
+2. **Never commit** to Git (use `.env` files, add to `.gitignore`)
+3. **Minimum 32 characters** for cryptographic strength
+4. **Use environment variables** in production (Vercel/Railway)
+
+**Generate Secret:**
+```bash
+# Using OpenSSL
+openssl rand -hex 32
+
+# Using Python
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Using Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
+
+### User Isolation Enforcement
+
+**Every Endpoint Must:**
+
+```python
+# 1. Extract user_id from JWT token
+current_user: str = Depends(verify_jwt)
+
+# 2. Extract user_id from URL path
+user_id: str  # Path parameter
+
+# 3. Verify they match
+if current_user != user_id:
+    raise HTTPException(status_code=403, detail="Forbidden")
+
+# 4. Filter all database queries by user_id
+query = select(Task).where(Task.user_id == user_id)
+```
+
+**Why This Matters:**
+- Prevents users from accessing other users' data
+- Even if user knows another user's ID, they can't access their tasks
+- Authorization check happens on every request
+- Database-level enforcement via WHERE clause
+
+---
+
+### Input Validation
+
+**Backend (Pydantic):**
+
+```python
+class TaskCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+
+    @validator('title')
+    def title_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Title cannot be empty')
+        return v.strip()
+```
+
+**Frontend (Form Validation):**
+
+```typescript
+function validateTask(data: { title: string; description?: string }) {
+  const errors: string[] = []
+
+  if (!data.title.trim()) {
+    errors.push('Title is required')
+  }
+
+  if (data.title.length > 200) {
+    errors.push('Title must be 200 characters or less')
+  }
+
+  if (data.description && data.description.length > 1000) {
+    errors.push('Description must be 1000 characters or less')
+  }
+
+  return errors
+}
+```
+
+**Defense in Depth:**
+- Validate on frontend (UX)
+- Validate on backend (security)
+- Never trust client input
+- SQL injection prevented by SQLModel ORM
+
+---
+
+## 12. IMPLEMENTATION CHECKLIST
+
+### Phase 1: Backend Setup
+- [ ] Initialize FastAPI project structure
+- [ ] Configure database connection (Neon)
+- [ ] Create SQLModel models (User, Task)
+- [ ] Create Pydantic schemas
+- [ ] Implement JWT verification middleware
+- [ ] Create task CRUD endpoints
+- [ ] Configure CORS
+- [ ] Add health check endpoint
+- [ ] Write backend tests (90%+ coverage)
+- [ ] Deploy to Railway/Render
+
+### Phase 2: Frontend Setup
+- [ ] Initialize Next.js project (App Router)
+- [ ] Configure Better Auth
+- [ ] Create API client (`lib/api.ts`)
+- [ ] Build component library
+- [ ] Implement login/signup pages
+- [ ] Implement task list page
+- [ ] Add loading and error states
+- [ ] Write frontend tests (80%+ coverage)
+- [ ] Deploy to Vercel
+
+### Phase 3: Integration
+- [ ] Test authentication flow end-to-end
+- [ ] Test task CRUD operations
+- [ ] Test authorization (user isolation)
+- [ ] Test error handling
+- [ ] Performance testing
+- [ ] Security audit
+
+### Phase 4: Production
+- [ ] Set up environment variables
+- [ ] Configure custom domains
+- [ ] Enable HTTPS
+- [ ] Set up monitoring
+- [ ] Document deployment process
+- [ ] Create runbook for common issues
+
+---
+
+## APPENDIX: TECHNOLOGY DECISIONS
+
+### Why Next.js?
+- **Server-side rendering** for better SEO and performance
+- **App Router** for modern React patterns
+- **Built-in API routes** for Better Auth integration
+- **Vercel deployment** for easy hosting
+- **TypeScript support** out of the box
+
+### Why FastAPI?
+- **Async/await** for high performance
+- **Automatic OpenAPI docs** for API exploration
+- **Pydantic integration** for validation
+- **Type hints** for better developer experience
+- **Easy deployment** to Railway/Render
+
+### Why SQLModel?
+- **Combines SQLAlchemy + Pydantic** (best of both)
+- **Type-safe** database operations
+- **Async support** for modern Python
+- **Automatic schema validation**
+- **PostgreSQL compatibility**
+
+### Why Neon?
+- **Serverless** (no infrastructure management)
+- **Auto-scaling** connections
+- **Instant cold starts**
+- **Branching** for development
+- **Generous free tier**
+
+### Why Better Auth?
+- **JWT plugin** built-in
+- **Password hashing** handled
+- **Cookie management** automatic
+- **Type-safe** client/server
+- **Next.js optimized**
+
+---
+
+**END OF IMPLEMENTATION PLAN**
+
+This document defines HOW to build Phase II. Next step: Break down into tasks (sp.tasks).
+
+**Version:** 1.0.0
+**Date:** 2026-01-01
+**Status:** Ready for Task Breakdown
+**Next Step:** Create task list (sp.tasks)

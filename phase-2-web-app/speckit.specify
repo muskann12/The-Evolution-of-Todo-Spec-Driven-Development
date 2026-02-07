@@ -1,0 +1,1363 @@
+# Phase II Todo Application - Specification
+
+**Document Type:** Feature Specification (WHAT to build)
+**Phase:** II - Full-Stack Web Application
+**Version:** 1.0.0
+**Date:** 2026-01-01
+**Status:** Ready for Implementation
+
+---
+
+## 1. OVERVIEW
+
+### Project Description
+Phase II builds a full-stack web application with Next.js frontend, FastAPI backend, and Neon PostgreSQL database. Users can sign up, log in, and manage their personal todo lists with persistent cloud storage.
+
+### Scope
+This specification defines WHAT needs to be built for Phase II:
+- User authentication system (signup, login, logout)
+- Personal task management (CRUD operations)
+- Multi-user support with data isolation
+- Persistent storage in PostgreSQL
+- Modern web interface with responsive design
+
+### Out of Scope
+- Task sharing between users
+- Team/organization features
+- Task categories or projects
+- Task attachments or comments
+- Mobile native applications
+- Real-time collaboration
+- Advanced filtering or search
+
+### Success Definition
+Phase II is successful when:
+1. Users can sign up and log in securely
+2. Users can create, read, update, and delete their tasks
+3. All data persists in PostgreSQL database
+4. Users can only see their own tasks (data isolation)
+5. Application is accessible via web browser
+6. All acceptance criteria are met
+
+---
+
+## 2. USER JOURNEYS
+
+### Journey 1: New User Signup and First Task
+
+**Actor:** Visitor (not logged in)
+
+**Goal:** Create an account and add first task
+
+**Steps:**
+1. User visits the application homepage
+2. User sees landing page with "Sign Up" and "Log In" buttons
+3. User clicks "Sign Up"
+4. User is shown signup form
+5. User enters name (e.g., "John Doe")
+6. User enters email (e.g., "john@example.com")
+7. User enters password (e.g., "securepass123")
+8. User clicks "Create Account" button
+9. System validates input (email format, password length)
+10. System creates user account in database
+11. System hashes password with bcrypt
+12. System generates JWT token
+13. System stores token in httpOnly cookie
+14. User is automatically logged in
+15. User is redirected to task list page (empty state)
+16. User sees message: "No tasks yet. Create your first task!"
+17. User clicks "Add Task" button
+18. User sees task creation form
+19. User enters title: "Buy groceries"
+20. User enters description: "Milk, eggs, bread"
+21. User clicks "Create Task" button
+22. System validates input
+23. System creates task in database (associated with user)
+24. Task appears immediately in the list
+25. User sees success message: "Task created successfully"
+
+**Success Criteria:**
+- ✅ Account created in database with UUID
+- ✅ Password hashed (not stored in plain text)
+- ✅ JWT token issued with 7-day expiry
+- ✅ Token stored in httpOnly cookie (not localStorage)
+- ✅ User_id in token matches database user
+- ✅ Task associated with correct user_id
+- ✅ Task persisted in database
+- ✅ UI updates immediately without page reload
+- ✅ No errors or crashes
+
+**Error Scenarios:**
+- Email already exists → Show error: "Email already registered"
+- Password too short → Show error: "Password must be at least 8 characters"
+- Invalid email format → Show error: "Please enter a valid email address"
+- Network error → Show error: "Network error. Please try again"
+
+---
+
+### Journey 2: Returning User Login and Task Management
+
+**Actor:** Registered user (has account)
+
+**Goal:** Log in and manage existing tasks
+
+**Steps:**
+1. User visits the application homepage
+2. User clicks "Log In"
+3. User is shown login form
+4. User enters email: "john@example.com"
+5. User enters password: "securepass123"
+6. User clicks "Log In" button
+7. System validates credentials
+8. System verifies password hash
+9. System generates new JWT token
+10. System stores token in httpOnly cookie
+11. User is redirected to task list page
+12. User sees their existing tasks (3 tasks)
+13. User sees task #1: "Buy groceries" (incomplete)
+14. User sees task #2: "Finish project" (incomplete)
+15. User sees task #3: "Call dentist" (completed, strikethrough)
+16. User clicks checkbox next to "Buy groceries"
+17. System updates task.completed = true
+18. Task shows checkmark and strikethrough
+19. Updated timestamp is recorded
+20. User hovers over "Finish project" task
+21. User clicks "Delete" icon
+22. System shows confirmation: "Are you sure you want to delete this task?"
+23. User clicks "Yes, delete"
+24. System deletes task from database
+25. Task is removed from list immediately
+26. User sees 2 tasks remaining
+27. User clicks "Log Out"
+28. System clears httpOnly cookie
+29. User is redirected to homepage
+
+**Success Criteria:**
+- ✅ Authentication successful with valid credentials
+- ✅ Only user's own tasks visible (data isolation)
+- ✅ Task completion toggles correctly (true ↔ false)
+- ✅ Task updates persist to database immediately
+- ✅ Deletions are permanent (task removed from DB)
+- ✅ UI stays in sync with backend state
+- ✅ Logout clears authentication token
+- ✅ After logout, protected routes are inaccessible
+
+**Error Scenarios:**
+- Wrong password → Show error: "Invalid email or password"
+- Email not found → Show error: "Invalid email or password" (same message for security)
+- Token expired → Redirect to login page
+- Network error during task update → Show error and don't update UI
+
+---
+
+### Journey 3: Task Editing
+
+**Actor:** Logged-in user
+
+**Goal:** Update task details
+
+**Steps:**
+1. User is logged in and viewing task list
+2. User sees task: "Buy groceries" with description "Milk, eggs, bread"
+3. User clicks "Edit" button on task
+4. Task expands to show edit form
+5. User changes title to "Buy groceries and supplies"
+6. User changes description to "Milk, eggs, bread, toilet paper, soap"
+7. User clicks "Save" button
+8. System validates input (title not empty, within length limits)
+9. System updates task in database
+10. System updates updated_at timestamp
+11. Task collapses back to view mode
+12. User sees updated title and description
+13. User sees success message: "Task updated successfully"
+
+**Success Criteria:**
+- ✅ User can edit title and description
+- ✅ Changes saved immediately to database
+- ✅ Updated_at timestamp is updated
+- ✅ Validation enforced (title required, max lengths)
+- ✅ Cannot edit other users' tasks (403 Forbidden)
+- ✅ UI shows updated values immediately
+
+**Error Scenarios:**
+- Title is empty → Show error: "Title is required"
+- Title exceeds 200 chars → Show error: "Title must be 200 characters or less"
+- Task not found → Show error: "Task not found" (404)
+- Not authorized → Redirect to login (401)
+
+---
+
+## 3. FEATURE REQUIREMENTS
+
+### Feature 1: User Authentication
+
+**Feature ID:** AUTH-001
+
+**User Story:**
+> As a visitor, I want to sign up for an account, so that I can have a personal todo list.
+
+**Business Value:** Enables multi-user application with data isolation
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: User Signup**
+- ✅ User can sign up with name, email, and password
+- ✅ Email must be unique (no duplicates allowed)
+- ✅ Email must be valid format (RFC 5322)
+- ✅ Name must be 2-100 characters
+- ✅ Password must be at least 8 characters
+- ✅ Password is hashed before storage (bcrypt via Better Auth)
+- ✅ JWT token issued on successful signup
+- ✅ User automatically logged in after signup
+- ✅ Token stored in httpOnly cookie (NOT localStorage)
+- ✅ Token expires after 7 days
+- ✅ User redirected to task list page
+
+**AC2: Input Validation**
+- ✅ Email validation: Reject invalid formats
+- ✅ Password validation: Reject passwords < 8 characters
+- ✅ Name validation: Reject empty or too long names
+- ✅ Show specific error messages for each validation failure
+- ✅ Frontend validates before sending request
+- ✅ Backend validates even if frontend bypassed
+
+**AC3: Error Handling**
+- ✅ Duplicate email → 409 Conflict: "Email already registered"
+- ✅ Invalid email → 400 Bad Request: "Invalid email address"
+- ✅ Password too short → 400 Bad Request: "Password must be at least 8 characters"
+- ✅ Missing fields → 400 Bad Request: "All fields are required"
+
+**Technical Requirements:**
+- Use Better Auth library for authentication
+- Enable JWT plugin
+- Configure shared `BETTER_AUTH_SECRET` (min 32 chars)
+- Store token in httpOnly cookie with SameSite=Strict
+- Backend: POST /api/auth/signup endpoint
+- Frontend: Signup form component with validation
+
+---
+
+### Feature 2: User Login
+
+**Feature ID:** AUTH-002
+
+**User Story:**
+> As a registered user, I want to log in with my credentials, so that I can access my todo list.
+
+**Business Value:** Returning users can access their persisted data
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: User Login**
+- ✅ User can log in with email and password
+- ✅ Incorrect credentials show error message
+- ✅ Same error for "email not found" and "wrong password" (security)
+- ✅ JWT token issued on successful login
+- ✅ Token stored in httpOnly cookie
+- ✅ User redirected to task list after login
+- ✅ Login persists across browser sessions (via cookie)
+
+**AC2: Token Management**
+- ✅ Token includes user_id in 'sub' claim
+- ✅ Token includes email and name in payload
+- ✅ Token signed with BETTER_AUTH_SECRET
+- ✅ Token expires in 7 days
+- ✅ Backend verifies token on every protected request
+- ✅ Expired tokens return 401 Unauthorized
+
+**AC3: Session Persistence**
+- ✅ Closing browser preserves login (cookie persists)
+- ✅ Opening new tab preserves login
+- ✅ Token sent automatically with requests (httpOnly cookie)
+
+**Technical Requirements:**
+- Backend: POST /api/auth/login endpoint
+- Frontend: Login form component
+- Password verification using bcrypt hash comparison
+- JWT generation with PyJWT library
+
+---
+
+### Feature 3: User Logout
+
+**Feature ID:** AUTH-003
+
+**User Story:**
+> As a logged-in user, I want to log out, so that I can secure my account on shared devices.
+
+**Business Value:** Security on shared/public computers
+
+**Priority:** P1 (High - Security feature)
+
+**Acceptance Criteria:**
+
+**AC1: Logout Functionality**
+- ✅ User can click "Logout" button
+- ✅ System clears httpOnly cookie
+- ✅ User redirected to homepage/login page
+- ✅ Protected routes become inaccessible
+- ✅ Attempting to access /tasks redirects to /login
+
+**AC2: Session Cleanup**
+- ✅ All client-side state cleared
+- ✅ Token no longer valid for API requests
+- ✅ User must log in again to access data
+
+**Technical Requirements:**
+- Backend: POST /api/auth/logout endpoint
+- Frontend: Logout button in header/nav
+- Clear cookie on backend response
+- Clear client state on frontend
+
+---
+
+### Feature 4: Task Creation
+
+**Feature ID:** TASK-001
+
+**User Story:**
+> As a logged-in user, I want to create a new task, so that I can remember things I need to do.
+
+**Business Value:** Core functionality - users can add items to todo list
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Task Creation Form**
+- ✅ User can add task with title (required)
+- ✅ User can optionally add description
+- ✅ "Add Task" button opens creation form
+- ✅ Form has title input (text field)
+- ✅ Form has description input (textarea)
+- ✅ Form has "Create" button
+
+**AC2: Validation**
+- ✅ Title cannot be empty
+- ✅ Title cannot exceed 200 characters
+- ✅ Description cannot exceed 1000 characters
+- ✅ Show character count for title and description
+- ✅ Show validation errors inline
+
+**AC3: Task Creation**
+- ✅ Task is associated with logged-in user (user_id from JWT)
+- ✅ Task appears immediately in the list (optimistic update)
+- ✅ Task is persisted to database
+- ✅ Created timestamp is recorded (server-side)
+- ✅ Task defaults to completed = false
+- ✅ Task gets auto-generated ID from database
+
+**AC4: UI Feedback**
+- ✅ Loading spinner while creating
+- ✅ Success message on creation
+- ✅ Form resets after creation
+- ✅ Error message on failure
+- ✅ Rollback optimistic update on error
+
+**Technical Requirements:**
+- Backend: POST /api/{user_id}/tasks endpoint
+- Pydantic validation for request body
+- SQLModel Task model with user_id foreign key
+- Return 201 Created with task object
+- JWT token required and verified
+
+---
+
+### Feature 5: Task List View
+
+**Feature ID:** TASK-002
+
+**User Story:**
+> As a logged-in user, I want to see all my tasks, so that I know what I need to do.
+
+**Business Value:** Users can view their complete task inventory
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Task List Display**
+- ✅ User sees only their own tasks (data isolation)
+- ✅ Tasks sorted by created date (newest first)
+- ✅ Each task shows title, description, completion status
+- ✅ Completed tasks visually distinguished (strikethrough text)
+- ✅ Task count shown (e.g., "5 tasks")
+
+**AC2: Empty State**
+- ✅ Empty state message if no tasks: "No tasks yet. Create your first task!"
+- ✅ "Add Task" button prominently displayed
+- ✅ Friendly illustration or icon
+
+**AC3: Loading State**
+- ✅ Loading spinner while fetching tasks
+- ✅ Skeleton screen (optional, for better UX)
+
+**AC4: Task Filtering (Optional)**
+- ✅ Filter by status: "All", "Pending", "Completed"
+- ✅ Default filter: "All"
+- ✅ Filter persists in URL query param
+
+**Technical Requirements:**
+- Backend: GET /api/{user_id}/tasks endpoint
+- Filter by user_id from JWT token (security)
+- Optional status query param: ?status=pending|completed|all
+- Return array of task objects
+- Index on user_id and completed for performance
+
+---
+
+### Feature 6: Task Update
+
+**Feature ID:** TASK-003
+
+**User Story:**
+> As a logged-in user, I want to edit my task, so that I can correct or clarify what I need to do.
+
+**Business Value:** Users can fix mistakes or add details
+
+**Priority:** P1 (High - Expected functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Inline Editing**
+- ✅ User can click "Edit" button on task
+- ✅ Title becomes editable text input
+- ✅ Description becomes editable textarea
+- ✅ "Save" and "Cancel" buttons appear
+- ✅ Cancel reverts changes
+
+**AC2: Saving Changes**
+- ✅ Changes saved immediately on "Save" click
+- ✅ Updated timestamp recorded
+- ✅ Validation same as create (title required, max lengths)
+- ✅ Cannot edit other users' tasks (403 Forbidden)
+- ✅ Error shown if task not found (404 Not Found)
+
+**AC3: Optimistic Update**
+- ✅ UI updates immediately
+- ✅ Rollback on server error
+- ✅ Show error message on failure
+
+**Technical Requirements:**
+- Backend: PUT /api/{user_id}/tasks/{id} endpoint
+- Verify task.user_id matches JWT user_id
+- Update updated_at timestamp automatically
+- Return updated task object
+- 403 Forbidden if user_id mismatch
+
+---
+
+### Feature 7: Task Deletion
+
+**Feature ID:** TASK-004
+
+**User Story:**
+> As a logged-in user, I want to delete a task, so that I can remove tasks I no longer need.
+
+**Business Value:** Users can clean up completed or irrelevant tasks
+
+**Priority:** P1 (High - Expected functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Delete Confirmation**
+- ✅ User can click "Delete" button/icon on task
+- ✅ Confirmation modal appears: "Are you sure you want to delete this task?"
+- ✅ Modal has "Delete" and "Cancel" buttons
+- ✅ Cancel closes modal without deleting
+
+**AC2: Task Deletion**
+- ✅ Task removed from list immediately (optimistic delete)
+- ✅ Task deleted from database
+- ✅ Cannot delete other users' tasks (403 Forbidden)
+- ✅ Error shown if task not found (404 Not Found)
+
+**AC3: Undo Option (Optional Enhancement)**
+- ✅ Show "Undo" toast for 5 seconds after deletion
+- ✅ Undo restores task before permanent deletion
+- ✅ After 5 seconds, deletion is permanent
+
+**Technical Requirements:**
+- Backend: DELETE /api/{user_id}/tasks/{id} endpoint
+- Verify task.user_id matches JWT user_id
+- Return 204 No Content on success
+- Return 404 if task not found
+- Return 403 if user_id mismatch
+
+---
+
+### Feature 8: Mark Task Complete
+
+**Feature ID:** TASK-005
+
+**User Story:**
+> As a logged-in user, I want to mark a task as complete, so that I can track my progress.
+
+**Business Value:** Users can track what's done vs. pending
+
+**Priority:** P0 (Critical - Core functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Toggle Completion**
+- ✅ User can toggle task completion with checkbox
+- ✅ Checking box sets completed = true
+- ✅ Unchecking box sets completed = false
+- ✅ Completed tasks show visual indicator (checkmark icon, strikethrough)
+- ✅ Status change persists immediately to database
+- ✅ Updated timestamp recorded
+
+**AC2: Visual Feedback**
+- ✅ Completed tasks: Strikethrough text, green checkmark
+- ✅ Incomplete tasks: No strikethrough, empty checkbox
+- ✅ Smooth animation on toggle
+- ✅ Optimistic UI update
+
+**AC3: Authorization**
+- ✅ Cannot modify other users' tasks (403 Forbidden)
+- ✅ Error shown if task not found (404 Not Found)
+
+**Technical Requirements:**
+- Backend: PATCH /api/{user_id}/tasks/{id}/complete endpoint
+- Toggle completed boolean (true ↔ false)
+- Update updated_at timestamp
+- Return updated task object
+- Verify user_id match
+
+---
+
+## 4. NON-FUNCTIONAL REQUIREMENTS
+
+### NFR-1: Performance
+
+**Response Times:**
+- ✅ API response time < 200ms (95th percentile)
+- ✅ GET /tasks: < 100ms
+- ✅ POST /tasks: < 150ms
+- ✅ PUT /tasks/{id}: < 150ms
+- ✅ DELETE /tasks/{id}: < 100ms
+
+**Frontend Load Time:**
+- ✅ First Contentful Paint < 1.5 seconds
+- ✅ Time to Interactive < 3 seconds
+- ✅ Lighthouse Performance Score > 90
+
+**Scalability:**
+- ✅ Support 100 concurrent users
+- ✅ Handle 1000 tasks per user
+- ✅ Database queries optimized with indexes
+
+**Measurement:**
+- Use browser DevTools Network tab
+- Use Lighthouse for frontend metrics
+- Use backend logging for API response times
+
+---
+
+### NFR-2: Security
+
+**Authentication Security:**
+- ✅ All API endpoints require valid JWT token (except /auth/signup, /auth/login)
+- ✅ Tokens stored in httpOnly cookies (prevents XSS)
+- ✅ SameSite=Strict (prevents CSRF)
+- ✅ Secure flag in production (HTTPS only)
+
+**Authorization Security:**
+- ✅ User data completely isolated (no cross-user access)
+- ✅ User_id extracted from JWT token only (never from client input)
+- ✅ Database queries filter by user_id
+- ✅ Return 403 Forbidden on user_id mismatch
+
+**Password Security:**
+- ✅ Passwords hashed with bcrypt (cost factor 10)
+- ✅ Passwords never stored in plain text
+- ✅ Passwords never logged or exposed
+- ✅ Better Auth handles password hashing
+
+**Input Validation:**
+- ✅ All inputs validated on backend (never trust client)
+- ✅ SQL injection prevention via SQLModel ORM
+- ✅ XSS prevention via React auto-escaping
+- ✅ Email validation (RFC 5322 format)
+
+**CORS Configuration:**
+- ✅ Allowed origins: http://localhost:3000 (dev), production domain
+- ✅ Credentials allowed: true (for cookies)
+- ✅ Allowed methods: GET, POST, PUT, DELETE, PATCH
+- ✅ Allowed headers: Content-Type, Authorization
+
+**Security Testing:**
+- ✅ No XSS vulnerabilities (use automated scanners)
+- ✅ No SQL injection vulnerabilities
+- ✅ No CSRF vulnerabilities
+- ✅ Token expiry enforced
+- ✅ Authorization checks on all endpoints
+
+---
+
+### NFR-3: Usability
+
+**Responsive Design:**
+- ✅ Mobile-first design approach
+- ✅ Breakpoints: mobile (< 640px), tablet (640-1024px), desktop (> 1024px)
+- ✅ Touch-friendly buttons (min 44x44px)
+- ✅ Readable font sizes on all devices
+
+**Accessibility (WCAG 2.1 AA):**
+- ✅ Keyboard navigation support
+- ✅ Screen reader support (ARIA labels)
+- ✅ Color contrast ratio > 4.5:1
+- ✅ Focus indicators visible
+- ✅ Error messages associated with form fields
+
+**Error Messages:**
+- ✅ Clear, user-friendly language
+- ✅ Actionable (tell user how to fix)
+- ✅ Specific (not generic "Error occurred")
+- ✅ Positioned near relevant UI element
+
+**Loading Indicators:**
+- ✅ Show spinner for async operations
+- ✅ Disable buttons during submission (prevent double-click)
+- ✅ Skeleton screens for list loading (optional)
+
+**Form Validation:**
+- ✅ Inline validation (as user types)
+- ✅ Validation on blur (leaving field)
+- ✅ Validation on submit
+- ✅ Clear error messages
+- ✅ Error state styling (red border, error icon)
+
+---
+
+### NFR-4: Reliability
+
+**Uptime:**
+- ✅ 99.9% uptime target (< 9 hours downtime per year)
+- ✅ Health check endpoint: GET /health
+- ✅ Database connection monitoring
+
+**Error Handling:**
+- ✅ Graceful degradation on errors
+- ✅ User-friendly error messages
+- ✅ Errors logged for debugging
+- ✅ Transaction rollback on failures
+
+**Data Integrity:**
+- ✅ Database constraints enforced (NOT NULL, UNIQUE, FOREIGN KEY)
+- ✅ Transactions for multi-step operations
+- ✅ Validation before writes
+- ✅ Automatic backups (Neon handles this)
+
+**Connection Pooling:**
+- ✅ SQLModel connection pool configured
+- ✅ Pool size: 10 connections
+- ✅ Max overflow: 20 connections
+- ✅ Pool timeout: 30 seconds
+
+---
+
+## 5. DATA REQUIREMENTS
+
+### User Table
+
+**Table Name:** `users`
+
+**Purpose:** Store user account information (managed by Better Auth)
+
+**Schema:**
+```sql
+CREATE TABLE users (
+    id VARCHAR PRIMARY KEY,           -- UUID string
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+```
+
+**Columns:**
+- `id`: UUID v4 string (primary key)
+- `email`: User's email address (unique, indexed, for login)
+- `name`: User's display name (2-100 characters)
+- `hashed_password`: Bcrypt hash of password (never plain text)
+- `created_at`: Account creation timestamp (UTC)
+
+**Constraints:**
+- Email must be unique
+- Email must be valid format
+- Name cannot be empty
+- Password hash cannot be empty
+
+**Sample Data:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "hashed_password": "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+  "created_at": "2026-01-01T12:00:00Z"
+}
+```
+
+---
+
+### Task Table
+
+**Table Name:** `tasks`
+
+**Purpose:** Store user tasks with completion status
+
+**Schema:**
+```sql
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id VARCHAR NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    description VARCHAR(1000),
+    completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+CREATE INDEX idx_tasks_completed ON tasks(completed);
+CREATE INDEX idx_tasks_created_at ON tasks(created_at);
+```
+
+**Columns:**
+- `id`: Auto-increment integer (primary key)
+- `user_id`: Foreign key to users.id (NOT NULL)
+- `title`: Task title (required, max 200 characters)
+- `description`: Task description (optional, max 1000 characters)
+- `completed`: Completion status (boolean, default false)
+- `created_at`: Creation timestamp (auto-generated, UTC)
+- `updated_at`: Last update timestamp (auto-updated, UTC)
+
+**Constraints:**
+- `user_id` must reference valid user
+- `title` cannot be empty
+- `title` max 200 characters
+- `description` max 1000 characters
+- Cascade delete: Deleting user deletes all their tasks
+
+**Indexes:**
+- `idx_tasks_user_id`: For filtering by user (performance)
+- `idx_tasks_completed`: For filtering by status
+- `idx_tasks_created_at`: For sorting by date
+
+**Sample Data:**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries",
+  "description": "Milk, eggs, bread",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z"
+}
+```
+
+---
+
+### Relationships
+
+**User → Tasks (One-to-Many):**
+- One user can have many tasks
+- Tasks cannot exist without a user
+- Deleting user deletes all their tasks (CASCADE)
+
+**SQL Relationship:**
+```sql
+ALTER TABLE tasks
+ADD CONSTRAINT fk_tasks_user_id
+FOREIGN KEY (user_id)
+REFERENCES users(id)
+ON DELETE CASCADE;
+```
+
+**SQLModel Relationship:**
+```python
+# In User model
+tasks: list["Task"] = Relationship(back_populates="user", cascade_delete=True)
+
+# In Task model
+user: User = Relationship(back_populates="tasks")
+```
+
+---
+
+## 6. API CONTRACT
+
+### Base URL
+- Development: `http://localhost:8000`
+- Production: `https://api.yourdomain.com`
+
+### Authentication Pattern
+
+All task endpoints follow this pattern:
+```
+/api/{user_id}/tasks
+```
+
+Where `{user_id}` is the authenticated user's UUID from the JWT token.
+
+**Authorization Rules:**
+1. All requests require: `Authorization: Bearer <jwt_token>` header
+2. Token `user_id` (from 'sub' claim) must match URL `{user_id}`
+3. Return 401 Unauthorized if token invalid/missing/expired
+4. Return 403 Forbidden if `user_id` mismatch
+
+---
+
+### Endpoint 1: List Tasks
+
+**GET** `/api/{user_id}/tasks`
+
+**Description:** Retrieve all tasks for the authenticated user
+
+**Authorization:** Required (JWT token)
+
+**Query Parameters:**
+- `status` (optional): Filter by completion status
+  - Values: `all` (default), `pending`, `completed`
+
+**Request:**
+```http
+GET /api/550e8400-e29b-41d4-a716-446655440000/tasks?status=all HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": 1,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "completed": false,
+    "created_at": "2026-01-01T12:00:00Z",
+    "updated_at": "2026-01-01T12:00:00Z"
+  },
+  {
+    "id": 2,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Finish project",
+    "description": null,
+    "completed": true,
+    "created_at": "2026-01-01T10:00:00Z",
+    "updated_at": "2026-01-01T14:00:00Z"
+  }
+]
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+
+---
+
+### Endpoint 2: Create Task
+
+**POST** `/api/{user_id}/tasks`
+
+**Description:** Create a new task for the authenticated user
+
+**Authorization:** Required (JWT token)
+
+**Request Body:**
+```json
+{
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints"
+}
+```
+
+**Validation:**
+- `title`: Required, max 200 characters
+- `description`: Optional, max 1000 characters
+
+**Request:**
+```http
+POST /api/550e8400-e29b-41d4-a716-446655440000/tasks HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 3,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints",
+  "completed": false,
+  "created_at": "2026-01-01T15:00:00Z",
+  "updated_at": "2026-01-01T15:00:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation error (title empty, too long, etc.)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+
+---
+
+### Endpoint 3: Get Task
+
+**GET** `/api/{user_id}/tasks/{id}`
+
+**Description:** Retrieve a specific task by ID
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Request:**
+```http
+GET /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries",
+  "description": "Milk, eggs, bread",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Endpoint 4: Update Task
+
+**PUT** `/api/{user_id}/tasks/{id}`
+
+**Description:** Update all fields of a specific task
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Request Body:**
+```json
+{
+  "title": "Buy groceries and supplies",
+  "description": "Milk, eggs, bread, toilet paper",
+  "completed": false
+}
+```
+
+**Request:**
+```http
+PUT /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "title": "Buy groceries and supplies",
+  "description": "Milk, eggs, bread, toilet paper",
+  "completed": false
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries and supplies",
+  "description": "Milk, eggs, bread, toilet paper",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T16:00:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation error
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Endpoint 5: Delete Task
+
+**DELETE** `/api/{user_id}/tasks/{id}`
+
+**Description:** Delete a specific task
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Request:**
+```http
+DELETE /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (204 No Content):**
+```
+(empty response body)
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Endpoint 6: Toggle Task Completion
+
+**PATCH** `/api/{user_id}/tasks/{id}/complete`
+
+**Description:** Toggle the completion status of a specific task
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Behavior:**
+- If `completed` is `false`, set to `true`
+- If `completed` is `true`, set to `false`
+- Update `updated_at` timestamp
+
+**Request:**
+```http
+PATCH /api/550e8400-e29b-41d4-a716-446655440000/tasks/1/complete HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries",
+  "description": "Milk, eggs, bread",
+  "completed": true,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T17:00:00Z"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Error Response Format
+
+All error responses follow this consistent format:
+
+**Single Error:**
+```json
+{
+  "detail": "Error message here"
+}
+```
+
+**Validation Error (Multiple Fields):**
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "title"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    },
+    {
+      "loc": ["body", "description"],
+      "msg": "ensure this value has at most 1000 characters",
+      "type": "value_error.any_str.max_length"
+    }
+  ]
+}
+```
+
+**HTTP Status Codes:**
+- `200 OK`: Successful GET, PUT, PATCH
+- `201 Created`: Successful POST
+- `204 No Content`: Successful DELETE
+- `400 Bad Request`: Invalid input data (validation error)
+- `401 Unauthorized`: Missing, invalid, or expired JWT token
+- `403 Forbidden`: Valid token but insufficient permissions (user_id mismatch)
+- `404 Not Found`: Resource doesn't exist
+- `409 Conflict`: Duplicate resource (e.g., email already exists)
+- `500 Internal Server Error`: Server error (should be rare)
+
+---
+
+## 7. ACCEPTANCE TESTING
+
+### Test Case 1: Signup Flow
+
+**Preconditions:** None (user not registered)
+
+**Steps:**
+1. Navigate to homepage
+2. Click "Sign Up"
+3. Enter name: "Test User"
+4. Enter email: "test@example.com"
+5. Enter password: "password123"
+6. Click "Create Account"
+
+**Expected Results:**
+- ✅ User account created in database
+- ✅ JWT token issued and stored in httpOnly cookie
+- ✅ User redirected to /tasks (empty state)
+- ✅ Email "test@example.com" cannot be used again (unique constraint)
+
+---
+
+### Test Case 2: Login Flow
+
+**Preconditions:** User exists (email: "test@example.com", password: "password123")
+
+**Steps:**
+1. Navigate to homepage
+2. Click "Log In"
+3. Enter email: "test@example.com"
+4. Enter password: "password123"
+5. Click "Log In"
+
+**Expected Results:**
+- ✅ JWT token issued and stored in httpOnly cookie
+- ✅ User redirected to /tasks
+- ✅ User sees their existing tasks
+
+---
+
+### Test Case 3: Create Task
+
+**Preconditions:** User is logged in
+
+**Steps:**
+1. On /tasks page
+2. Click "Add Task"
+3. Enter title: "Test Task"
+4. Enter description: "This is a test"
+5. Click "Create"
+
+**Expected Results:**
+- ✅ Task appears immediately in the list
+- ✅ Task persisted to database with user_id
+- ✅ Task has completed = false
+- ✅ created_at and updated_at timestamps set
+
+---
+
+### Test Case 4: Toggle Completion
+
+**Preconditions:** User is logged in, task exists
+
+**Steps:**
+1. On /tasks page with at least one task
+2. Click checkbox next to task
+
+**Expected Results:**
+- ✅ Task completed status toggles (false → true or true → false)
+- ✅ UI updates immediately (strikethrough if completed)
+- ✅ Database updated
+- ✅ updated_at timestamp updated
+
+---
+
+### Test Case 5: Delete Task
+
+**Preconditions:** User is logged in, task exists
+
+**Steps:**
+1. On /tasks page with at least one task
+2. Click "Delete" icon on task
+3. Confirm deletion in modal
+
+**Expected Results:**
+- ✅ Task removed from list immediately
+- ✅ Task deleted from database
+- ✅ Task no longer accessible via API
+
+---
+
+### Test Case 6: Data Isolation
+
+**Preconditions:** Two users exist (User A, User B), each with tasks
+
+**Steps:**
+1. Log in as User A
+2. Note task count and IDs
+3. Log out
+4. Log in as User B
+5. Note task count and IDs
+
+**Expected Results:**
+- ✅ User A sees only their tasks
+- ✅ User B sees only their tasks
+- ✅ No overlap in tasks between users
+- ✅ Attempting to access User A's task as User B returns 403 Forbidden
+
+---
+
+## 8. DEPENDENCIES
+
+### Frontend Dependencies
+- Next.js 16+ (React framework)
+- React 19+ (UI library)
+- TypeScript 5+ (Type safety)
+- Tailwind CSS 4+ (Styling)
+- Better Auth (Authentication)
+- React Query / TanStack Query (Data fetching)
+
+### Backend Dependencies
+- Python 3.13+ (Programming language)
+- FastAPI (Web framework)
+- SQLModel (ORM)
+- Pydantic v2 (Validation)
+- asyncpg (PostgreSQL driver)
+- Alembic (Database migrations)
+- PyJWT (JWT tokens)
+- python-multipart (Form data)
+- passlib[bcrypt] (Password hashing)
+
+### Infrastructure
+- Neon Serverless PostgreSQL (Database)
+- Vercel or similar (Frontend deployment)
+- Render/Railway or similar (Backend deployment)
+
+---
+
+## 9. CONSTRAINTS
+
+### Technical Constraints
+- Must use Next.js 16+ App Router (no Pages Router)
+- Must use Better Auth (no custom auth implementation)
+- Must use SQLModel (no raw SQL or other ORMs)
+- Must use Neon PostgreSQL (no other databases)
+- Must use JWT tokens stored in httpOnly cookies (no localStorage)
+
+### Security Constraints
+- Passwords must never be stored in plain text
+- User_id must always come from JWT token (never from client input)
+- All API endpoints must verify JWT token (except auth endpoints)
+- Users must only access their own data (strict isolation)
+
+### Performance Constraints
+- API response time must be < 200ms (95th percentile)
+- Frontend must load in < 3 seconds
+- Must support at least 100 concurrent users
+
+### Time Constraints
+- Phase II must be completed within allocated timeframe
+- No gold-plating or scope creep
+- Focus on MVP features only
+
+---
+
+## 10. SUCCESS METRICS
+
+### Functional Metrics
+- ✅ All 8 features implemented and working
+- ✅ All acceptance criteria met
+- ✅ All user journeys completable
+- ✅ All 6 API endpoints functional
+- ✅ 100% of test cases passing
+
+### Quality Metrics
+- ✅ Backend test coverage > 90%
+- ✅ Frontend test coverage > 80%
+- ✅ Zero critical security vulnerabilities
+- ✅ Lighthouse score > 90
+- ✅ mypy --strict passing (backend)
+- ✅ TypeScript strict mode passing (frontend)
+
+### Performance Metrics
+- ✅ API response time < 200ms (95th percentile)
+- ✅ First Contentful Paint < 1.5s
+- ✅ Time to Interactive < 3s
+- ✅ Support 100 concurrent users without degradation
+
+### User Experience Metrics
+- ✅ Zero authentication failures with valid credentials
+- ✅ Task operations complete in < 1 second (perceived)
+- ✅ Error messages clear and actionable
+- ✅ No data loss scenarios
+
+---
+
+## APPENDIX A: GLOSSARY
+
+**JWT (JSON Web Token):** A standard for creating access tokens that assert claims (like user identity).
+
+**httpOnly Cookie:** A cookie that cannot be accessed via JavaScript (prevents XSS attacks).
+
+**SameSite:** Cookie attribute that prevents CSRF attacks by controlling when cookies are sent.
+
+**Better Auth:** Third-party authentication library that handles password hashing and user management.
+
+**SQLModel:** ORM that combines SQLAlchemy and Pydantic for type-safe database operations.
+
+**Neon:** Serverless PostgreSQL platform with auto-scaling and branching.
+
+**Optimistic Update:** Updating UI immediately before server confirms the change (better UX).
+
+**Data Isolation:** Ensuring users can only access their own data (multi-tenancy).
+
+**WCAG 2.1 AA:** Web Content Accessibility Guidelines Level AA compliance.
+
+---
+
+## APPENDIX B: REFERENCES
+
+**Related Documents:**
+- `speckit.constitution` - Architectural principles and standards
+- `@specs/features/user-authentication.md` - Detailed auth spec
+- `@specs/api/auth-endpoints.md` - Auth API details
+- `@specs/api/todos-endpoints.md` - Task API details
+- `@specs/database/schema.md` - Database schema
+
+**External Resources:**
+- Next.js Documentation: https://nextjs.org/docs
+- FastAPI Documentation: https://fastapi.tiangolo.com/
+- Better Auth Documentation: https://www.better-auth.com/
+- SQLModel Documentation: https://sqlmodel.tiangolo.com/
+- Neon Documentation: https://neon.tech/docs
+
+---
+
+**END OF SPECIFICATION**
+
+This document defines WHAT needs to be built for Phase II. Implementation details (HOW) will be defined in the plan document.
+
+**Version:** 1.0.0
+**Date:** 2026-01-01
+**Status:** Ready for Planning
+**Next Step:** Create implementation plan (sp.plan)
