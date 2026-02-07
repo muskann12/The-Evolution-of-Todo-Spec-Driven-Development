@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.specify/scripts/bash/create-phr.sh:*)",
+      "Skill(sp.specify)",
+      "Bash(git fetch:*)",
+      "Bash(ls:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(cat:*)",
+      "Skill(sp.tasks)",
+      "Bash(python -m unittest:*)",
+      "Bash(uv venv:*)",
+      "Bash(uv run python:*)",
+      "Bash(del test_mvp.py demo_display.py)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(uv add:*)",
+      "Bash(echo:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"Get-Content ''D:\\\\HACKATHONS\\\\HackathonII-TODO-APP\\\\src\\\\cli.py'' | Select-Object -Last 10\")",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"\\(Get-Content ''D:\\\\HACKATHONS\\\\HackathonII-TODO-APP\\\\src\\\\cli.py'' | Measure-Object -Line\\).Lines\")",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"\\(Get-Content ''D:\\\\HACKATHONS\\\\HackathonII-TODO-APP\\\\tests\\\\unit\\\\test_models.py'' | Measure-Object -Line\\).Lines\")",
+      "Bash(powershell -Command \"$input | Select-String -Pattern ''Ran|OK|FAILED''\")",
+      "Bash(del:*)",
+      "Bash(powershell -Command \"Remove-Item test_recurring_demo.py\")",
+      "Bash(git tag:*)",
+      "Bash(powershell -Command \"Remove-Item test_priority_fix.py\")",
+      "Bash(mkdir:*)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}
