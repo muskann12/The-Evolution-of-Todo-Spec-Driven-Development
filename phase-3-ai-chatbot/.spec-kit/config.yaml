@@ -1,0 +1,115 @@
+# SpecKit Plus Configuration
+# Phase II - Full-Stack Web Application
+
+project:
+  name: "Todo Manager - Phase II Web App"
+  version: "2.0.0"
+  phase: "Phase II - Full-Stack Development"
+
+specs:
+  root: "specs"
+
+  # Spec file locations
+  locations:
+    overview: "specs/overview.md"
+    architecture: "specs/architecture.md"
+    features: "specs/features"
+    api: "specs/api"
+    database: "specs/database"
+    ui: "specs/ui"
+
+  # Template paths
+  templates:
+    feature: ".specify/templates/spec-template.md"
+    plan: ".specify/templates/plan-template.md"
+    tasks: ".specify/templates/tasks-template.md"
+    checklist: ".specify/templates/checklist-template.md"
+
+# Spec-Kit lifecycle stages
+lifecycle:
+  stages:
+    - constitution  # WHY - Principles & Constraints
+    - specify       # WHAT - Requirements
+    - plan          # HOW - Architecture
+    - tasks         # BREAKDOWN - Work units
+    - implement     # CODE - Execution
+
+  # Current stage
+  current: "specify"
+
+# Validation rules
+validation:
+  require_task_id: true
+  require_spec_reference: true
+  enforce_user_stories: true
+  require_acceptance_criteria: true
+
+# Agent behavior
+agents:
+  rules_file: "AGENTS.md"
+  constitution: ".specify/memory/constitution.md"
+
+  # Allowed agents
+  specialized:
+    - spec-writer
+    - fastapi-developer
+    - nextjs-developer
+    - auth-specialist
+    - fullstack-architect
+
+# Development workflow
+workflow:
+  spec_first: true
+  no_code_without_spec: true
+  require_approval: true
+
+  # Spec update process
+  updates:
+    require_user_approval: true
+    document_changes: true
+    update_related_specs: true
+
+# Quality gates
+quality:
+  checklist:
+    - "Task ID referenced in code"
+    - "Spec sections linked"
+    - "Acceptance criteria met"
+    - "Tests written and passing"
+    - "No improvised features"
+    - "Architecture follows plan"
+
+  blocking_issues:
+    - "Missing specification"
+    - "Incomplete acceptance criteria"
+    - "No task breakdown"
+    - "Conflicting requirements"
+
+# Tech stack (from constitution)
+stack:
+  frontend:
+    framework: "Next.js 16+"
+    language: "TypeScript"
+    styling: "Tailwind CSS"
+    auth: "Better Auth"
+
+  backend:
+    framework: "FastAPI"
+    language: "Python 3.13+"
+    orm: "SQLModel"
+    database: "Neon PostgreSQL"
+    auth: "PyJWT"
+
+# Documentation
+documentation:
+  main_guide: "CLAUDE.md"
+  agent_rules: "AGENTS.md"
+  procedures: "PROCEDURES.md"
+  frontend_guide: "frontend/CLAUDE.md"
+  backend_guide: "backend/CLAUDE.md"
+
+# Metadata
+metadata:
+  created: "2025-12-31"
+  framework: "SpecKit Plus"
+  managed_by: "Claude Code"

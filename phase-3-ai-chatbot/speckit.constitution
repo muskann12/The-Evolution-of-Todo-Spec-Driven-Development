@@ -1,0 +1,1314 @@
+# Phase II Todo Application - Constitution
+
+**Version:** 2.0.0
+**Ratified:** 2026-01-01
+**Last Amended:** 2026-01-01
+**Phase:** II - Full-Stack Web Application
+
+---
+
+## 1. PROJECT OVERVIEW
+
+### Application Description
+Multi-user web-based todo application with persistent storage, user authentication, and cloud database backend.
+
+### Phase Information
+- **Phase:** II - Full-Stack Web Application
+- **Evolution From:** Phase I (CLI with in-memory storage)
+- **Architecture:** Monorepo with separate frontend and backend
+- **Authentication:** Better Auth with JWT tokens
+- **Database:** Neon Serverless PostgreSQL
+- **Development Framework:** SpecKit Plus (Spec-Driven Development)
+
+### Core Capabilities
+- User registration and authentication
+- Secure task management with CRUD operations
+- Persistent data storage in cloud database
+- User data isolation (multi-tenant)
+- Modern web interface with responsive design
+
+---
+
+## 2. ARCHITECTURAL PRINCIPLES
+
+### Separation of Concerns
+
+**Frontend (Next.js) Responsibilities:**
+- User interface rendering and interactions
+- Client-side routing and navigation
+- Form handling and validation
+- Authentication state management
+- API communication via centralized client
+
+**Backend (FastAPI) Responsibilities:**
+- Business logic and validation
+- Database operations and queries
+- Authentication and authorization
+- API endpoint implementation
+- JWT token generation and verification
+
+**Database (Neon PostgreSQL) Responsibilities:**
+- Persistent data storage
+- Data integrity enforcement
+- Relationship management
+- Query optimization
+
+**Authentication (Better Auth + JWT) Responsibilities:**
+- User credential management
+- Password hashing and verification
+- Token generation and validation
+- Session management
+
+**Rationale:** Clear separation enables independent scaling, testing, and evolution of each layer. Frontend can be replaced without affecting business logic; backend can be scaled independently.
+
+---
+
+### Monorepo Organization
+
+**Directory Structure:**
+```
+phase-2-web-app/
+├── frontend/           # Next.js application
+├── backend/            # FastAPI application
+├── specs/              # Shared specifications
+├── .claude/            # Claude Code configuration
+├── .specify/           # SpecKit Plus framework
+└── speckit.constitution # This file
+```
+
+**Benefits:**
+- Shared specifications across frontend and backend
+- Unified version control
+- Coordinated deployments
+- Consistent development workflow
+
+**Rationale:** Monorepo structure maintains cohesion while preserving separation of concerns. Shared specs ensure frontend/backend alignment.
+
+---
+
+### Security First
+
+**Authentication Security:**
+- JWT tokens with 7-day expiry
+- Shared `BETTER_AUTH_SECRET` between frontend and backend (minimum 32 characters)
+- HttpOnly cookies for token storage (NOT localStorage - prevents XSS attacks)
+- SameSite=Strict for CSRF protection
+- Secure flag in production (HTTPS only)
+
+**Authorization Security:**
+- All API endpoints require JWT authentication (except /api/auth/*)
+- User ID extracted from JWT token (never from client input)
+- URL user_id must match token user_id
+- Users can only access their own data
+- Return 403 Forbidden on user_id mismatch
+
+**Input Validation:**
+- All inputs validated on backend (never trust client)
+- SQL injection prevention via SQLModel ORM
+- XSS prevention via React auto-escaping
+- Email validation (RFC 5322 format)
+- Password requirements enforced (min 8 characters)
+
+**Password Security:**
+- Better Auth handles password hashing (bcrypt)
+- Passwords never stored in plain text
+- Passwords never logged or exposed
+- Same error message for "user not found" and "wrong password" (prevents email enumeration)
+
+**CORS Configuration:**
+- Allowed origins: `http://localhost:3000` (development)
+- Credentials allowed: true (for cookies)
+- Allowed methods: GET, POST, PUT, DELETE, PATCH
+- Allowed headers: Content-Type, Authorization
+
+**Rationale:** Security is non-negotiable. HttpOnly cookies prevent XSS token theft. User ID from token prevents authorization bypass. CORS prevents unauthorized API access.
+
+---
+
+### Spec-Driven Development
+
+**Mandatory Workflow:**
+1. **Specify:** Write feature specification in `specs/features/[feature].md`
+2. **Plan:** Create implementation plan
+3. **Tasks:** Break plan into actionable tasks
+4. **Implement:** Generate code from specifications
+5. **Test:** Validate against acceptance criteria
+
+**Non-Negotiable Rules:**
+- NO manual coding without specifications
+- NO implementation before specification exists
+- NO feature additions without spec approval
+- ALL code changes map to a task
+- ALL tasks map to a specification
+
+**Specification Requirements:**
+- Feature scope and boundaries
+- User interaction models
+- Data structures and validation rules
+- Error conditions and handling
+- Testable acceptance criteria
+- API contracts (request/response)
+
+**Rationale:** Specifications prevent scope creep, ensure completeness, and enable validation. Generated code from specs enforces consistency and reduces human error.
+
+---
+
+## 3. TECHNOLOGY STACK
+
+### Frontend Stack
+
+**Framework:**
+- Next.js 16+ (App Router)
+- React 19+
+- TypeScript 5+ (strict mode)
+
+**Styling:**
+- Tailwind CSS 4+
+- No inline styles
+- Component-based design system
+
+**Authentication:**
+- Better Auth (authentication library)
+- JWT plugin for token management
+- HttpOnly cookie storage
+
+**Data Fetching:**
+- React Query (TanStack Query) for server state
+- Centralized API client in `/lib/api.ts`
+- Automatic token injection
+
+**Development:**
+- ESLint with TypeScript plugin
+- Prettier for formatting
+- Jest + React Testing Library
+- TypeScript strict mode
+
+---
+
+### Backend Stack
+
+**Framework:**
+- Python 3.13+
+- FastAPI with async/await
+- Uvicorn ASGI server
+
+**Database:**
+- SQLModel (ORM)
+- asyncpg (PostgreSQL driver)
+- Alembic (migrations)
+
+**Validation:**
+- Pydantic v2 for schemas
+- Type hints for all functions
+- Custom exception classes
+
+**Authentication:**
+- PyJWT for token generation/verification
+- python-multipart for form data
+- passlib with bcrypt for password hashing
+
+**Development:**
+- pytest with async support
+- mypy for type checking
+- ruff for linting
+- pytest-cov for coverage
+
+---
+
+### Database Stack
+
+**Database:**
+- Neon Serverless PostgreSQL
+- Connection pooling enabled
+- SSL/TLS encryption
+
+**ORM:**
+- SQLModel (SQLAlchemy + Pydantic)
+- Async queries
+- Relationship management
+
+**Migrations:**
+- Alembic for version control
+- Auto-generation from models
+- Rollback support
+
+---
+
+### Development Tools
+
+**Package Management:**
+- UV for Python (faster than pip)
+- npm for Node.js
+
+**AI-Assisted Development:**
+- Claude Code for implementation
+- Specialized agents (nextjs-developer, fastapi-developer, auth-specialist)
+
+**Specification Framework:**
+- SpecKit Plus for spec-driven workflow
+- Template-based specifications
+- Automated task generation
+
+---
+
+## 4. CODING STANDARDS
+
+### Frontend Standards (TypeScript)
+
+**TypeScript Configuration:**
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}
+```
+
+**Component Guidelines:**
+- Server Components by default (no 'use client' unless needed)
+- Client Components only for: interactivity, hooks, browser APIs
+- Props typed with TypeScript interfaces
+- Default exports for pages, named exports for components
+- Async Server Components for data fetching
+
+**API Communication:**
+- All API calls through `/lib/api.ts`
+- Centralized error handling
+- Automatic token injection
+- Type-safe request/response
+
+**Styling:**
+- Tailwind CSS only (no CSS modules, no inline styles)
+- Utility-first approach
+- Consistent spacing and colors
+- Responsive design (mobile-first)
+
+**File Naming:**
+- Components: PascalCase (e.g., `TaskList.tsx`)
+- Utilities: camelCase (e.g., `apiClient.ts`)
+- Pages: kebab-case (e.g., `login.tsx`)
+
+**Code Quality:**
+- ESLint configuration enforced
+- Prettier for formatting (2 spaces)
+- No console.log in production
+- Meaningful variable names
+- Comments for complex logic only
+
+---
+
+### Backend Standards (Python)
+
+**Type Hints:**
+```python
+# Required for ALL functions
+async def create_task(
+    task: TaskCreate,
+    user_id: str,
+    session: AsyncSession
+) -> Task:
+    ...
+```
+
+**Docstrings:**
+```python
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt.
+
+    Args:
+        password: Plain text password to hash
+
+    Returns:
+        Bcrypt hashed password string
+
+    Raises:
+        ValueError: If password is empty
+    """
+```
+
+**Async/Await:**
+- All I/O operations must be async
+- Database queries use async session
+- Use `await` for async calls
+- No blocking operations
+
+**Error Handling:**
+```python
+# Custom exceptions
+class TaskNotFoundError(HTTPException):
+    def __init__(self, task_id: int):
+        super().__init__(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+# Usage
+if not task:
+    raise TaskNotFoundError(task_id)
+```
+
+**Logging:**
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Use logging, NOT print
+logger.info(f"User {user_id} logged in")
+logger.error(f"Failed to create task: {error}")
+```
+
+**Code Quality:**
+- mypy --strict passing
+- ruff linting passing
+- 90%+ test coverage
+- No TODO comments in production code
+
+---
+
+### API Design Standards
+
+**RESTful Conventions:**
+```
+GET    /api/{user_id}/tasks       # List resources
+POST   /api/{user_id}/tasks       # Create resource
+GET    /api/{user_id}/tasks/{id}  # Get single resource
+PUT    /api/{user_id}/tasks/{id}  # Update resource (full)
+PATCH  /api/{user_id}/tasks/{id}  # Update resource (partial)
+DELETE /api/{user_id}/tasks/{id}  # Delete resource
+```
+
+**Request/Response Format:**
+```json
+// Success Response
+{
+  "id": 1,
+  "title": "Task title",
+  "completed": false
+}
+
+// Error Response
+{
+  "detail": "Error message"
+}
+
+// Validation Error Response
+{
+  "detail": [
+    {
+      "loc": ["body", "title"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+```
+
+**HTTP Status Codes:**
+- 200 OK - Successful GET, PUT, PATCH
+- 201 Created - Successful POST
+- 204 No Content - Successful DELETE
+- 400 Bad Request - Validation error
+- 401 Unauthorized - Missing/invalid token
+- 403 Forbidden - Valid token but insufficient permissions
+- 404 Not Found - Resource doesn't exist
+- 409 Conflict - Duplicate resource (e.g., email exists)
+- 500 Internal Server Error - Server error
+
+**Validation:**
+- Pydantic models for request bodies
+- Path parameters validated
+- Query parameters validated
+- Automatic OpenAPI documentation
+
+---
+
+## 5. DATA MODEL STANDARDS
+
+### User Model
+
+**Table:** `users`
+
+**Schema:**
+```python
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: str = Field(primary_key=True)  # UUID string
+    name: str = Field(max_length=100)
+    email: str = Field(unique=True, index=True, max_length=255)
+    hashed_password: str = Field(max_length=255)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    tasks: list["Task"] = Relationship(back_populates="user")
+```
+
+**Constraints:**
+- `id`: Primary key (UUID v4)
+- `email`: Unique, indexed, valid email format
+- `name`: Required, 2-100 characters
+- `hashed_password`: Bcrypt hash (never plain text)
+
+**Managed By:** Better Auth handles user creation and password hashing
+
+---
+
+### Task Model
+
+**Table:** `tasks`
+
+**Schema:**
+```python
+class Task(SQLModel, table=True):
+    __tablename__ = "tasks"
+
+    id: int = Field(primary_key=True)  # Auto-increment
+    user_id: str = Field(foreign_key="users.id", index=True)
+    title: str = Field(max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+    completed: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Relationship
+    user: User = Relationship(back_populates="tasks")
+```
+
+**Constraints:**
+- `id`: Primary key (auto-increment integer)
+- `user_id`: Foreign key to users (NOT NULL, indexed)
+- `title`: Required, max 200 characters
+- `description`: Optional, max 1000 characters
+- `completed`: Boolean, default false
+
+**Indexes:**
+```sql
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+CREATE INDEX idx_tasks_completed ON tasks(completed);
+CREATE INDEX idx_tasks_created_at ON tasks(created_at);
+```
+
+---
+
+### Relationships
+
+**One-to-Many: User → Tasks**
+- One user can have many tasks
+- Tasks cannot exist without a user
+- Cascade delete: Deleting user deletes all their tasks
+
+**SQL Constraint:**
+```sql
+ALTER TABLE tasks
+ADD CONSTRAINT fk_tasks_user_id
+FOREIGN KEY (user_id)
+REFERENCES users(id)
+ON DELETE CASCADE;
+```
+
+**SQLModel Implementation:**
+```python
+# In User model
+tasks: list["Task"] = Relationship(
+    back_populates="user",
+    cascade_delete=True
+)
+
+# In Task model
+user: User = Relationship(back_populates="tasks")
+```
+
+---
+
+## 6. QUALITY GATES
+
+### Backend Quality Gates
+
+**Testing:**
+- ✅ 90%+ test coverage (pytest-cov)
+- ✅ All unit tests passing
+- ✅ All integration tests passing
+- ✅ All contract tests passing
+
+**Type Safety:**
+- ✅ mypy --strict passing (no type errors)
+- ✅ Full type hints on all functions
+- ✅ No `Any` types (except when unavoidable)
+
+**Code Quality:**
+- ✅ ruff linting passing (no errors)
+- ✅ No code smells or duplications
+- ✅ Consistent code formatting
+
+**Security:**
+- ✅ No hardcoded secrets
+- ✅ All inputs validated
+- ✅ SQL injection prevention verified
+- ✅ Authentication on all protected endpoints
+
+---
+
+### Frontend Quality Gates
+
+**Testing:**
+- ✅ 80%+ component test coverage (Jest)
+- ✅ All component tests passing
+- ✅ Critical user flows tested
+
+**Type Safety:**
+- ✅ TypeScript strict mode passing
+- ✅ No `any` types (except when unavoidable)
+- ✅ Props fully typed
+
+**Code Quality:**
+- ✅ ESLint passing (no errors)
+- ✅ Prettier formatting applied
+- ✅ No console errors in browser
+
+**Build:**
+- ✅ Production build succeeds
+- ✅ No build warnings
+- ✅ Bundle size < 300KB (excluding node_modules)
+
+---
+
+### Integration Quality Gates
+
+**API Testing:**
+- ✅ All 6 CRUD endpoints tested
+- ✅ Authentication flow tested (signup → login → logout)
+- ✅ Authorization tested (user isolation)
+- ✅ Error handling tested
+
+**End-to-End Testing:**
+- ✅ User signup flow
+- ✅ User login flow
+- ✅ Task CRUD operations
+- ✅ Task completion toggle
+- ✅ User logout flow
+
+**Performance:**
+- ✅ API response time < 200ms (95th percentile)
+- ✅ Frontend First Contentful Paint < 1.5s
+- ✅ Lighthouse score > 90
+
+---
+
+## 7. ERROR HANDLING POLICY
+
+### Frontend Error Handling
+
+**User-Facing Errors:**
+```typescript
+// Good: User-friendly message
+"Failed to create task. Please try again."
+
+// Bad: Technical message
+"POST /api/tasks returned 500: Internal Server Error"
+```
+
+**Loading States:**
+```typescript
+// Required for all async operations
+const [isLoading, setIsLoading] = useState(false)
+
+if (isLoading) return <LoadingSpinner />
+```
+
+**Form Validation:**
+```typescript
+// Client-side validation with feedback
+if (!title.trim()) {
+  setError("Title is required")
+  return
+}
+
+if (title.length > 200) {
+  setError("Title must be 200 characters or less")
+  return
+}
+```
+
+**API Error Handling:**
+```typescript
+try {
+  await createTask(data)
+} catch (error) {
+  if (error.status === 401) {
+    // Logout on unauthorized
+    logout()
+    router.push('/login')
+  } else {
+    // Show user-friendly message
+    setError("Failed to create task. Please try again.")
+  }
+}
+```
+
+**Graceful Degradation:**
+- Handle network errors
+- Handle timeout errors
+- Handle server errors
+- Provide retry mechanisms
+
+---
+
+### Backend Error Handling
+
+**Custom Exceptions:**
+```python
+class TaskNotFoundError(HTTPException):
+    def __init__(self, task_id: int):
+        super().__init__(status_code=404, detail=f"Task {task_id} not found")
+
+class UnauthorizedError(HTTPException):
+    def __init__(self):
+        super().__init__(status_code=401, detail="Invalid or expired token")
+
+class ForbiddenError(HTTPException):
+    def __init__(self):
+        super().__init__(status_code=403, detail="Forbidden")
+```
+
+**Consistent Error Format:**
+```python
+# All errors return same structure
+{
+  "detail": "Error message"
+}
+```
+
+**Logging:**
+```python
+# Log errors with context (not exposed to client)
+logger.error(
+    f"Failed to create task for user {user_id}",
+    exc_info=True,
+    extra={"user_id": user_id, "task_data": task_data}
+)
+```
+
+**Validation Errors:**
+```python
+# Pydantic automatically formats validation errors
+{
+  "detail": [
+    {
+      "loc": ["body", "title"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+```
+
+---
+
+## 8. SECURITY GUIDELINES
+
+### Authentication
+
+**JWT Token Structure:**
+```json
+{
+  "header": {
+    "alg": "HS256",
+    "typ": "JWT"
+  },
+  "payload": {
+    "sub": "user-id-here",
+    "email": "user@example.com",
+    "name": "User Name",
+    "iat": 1735689600,
+    "exp": 1736294400
+  }
+}
+```
+
+**Token Properties:**
+- Algorithm: HS256 (HMAC-SHA256)
+- Expiry: 7 days from issue
+- Claims: sub (user_id), email, name, iat, exp
+- Signature: BETTER_AUTH_SECRET (min 32 chars)
+
+**Token Storage:**
+- HttpOnly cookie (prevents JavaScript access)
+- SameSite=Strict (prevents CSRF)
+- Secure flag in production (HTTPS only)
+- NOT in localStorage (vulnerable to XSS)
+
+**Token Lifecycle:**
+```
+1. User logs in
+2. Backend generates JWT
+3. Backend sets HttpOnly cookie
+4. Frontend includes cookie in requests (automatic)
+5. Backend verifies token on each request
+6. User logs out → cookie cleared
+```
+
+---
+
+### Authorization
+
+**Endpoint Protection:**
+```python
+# All endpoints require authentication
+async def get_current_user(
+    token: str = Depends(oauth2_scheme)
+) -> User:
+    # Verify token
+    # Extract user_id
+    # Fetch user from database
+    # Return user or raise 401
+```
+
+**User Isolation:**
+```python
+# Verify URL user_id matches token user_id
+if url_user_id != token_user_id:
+    raise HTTPException(status_code=403, detail="Forbidden")
+
+# Filter database queries by user_id
+tasks = await session.execute(
+    select(Task).where(Task.user_id == token_user_id)
+)
+```
+
+**Authorization Rules:**
+- User can ONLY read their own tasks
+- User can ONLY create tasks for themselves
+- User can ONLY update their own tasks
+- User can ONLY delete their own tasks
+- Return 403 if user_id mismatch
+
+---
+
+### Input Validation
+
+**Email Validation:**
+```python
+from pydantic import EmailStr
+
+class UserCreate(BaseModel):
+    email: EmailStr  # RFC 5322 validation
+    name: str = Field(min_length=2, max_length=100)
+    password: str = Field(min_length=8)
+```
+
+**SQL Injection Prevention:**
+- SQLModel ORM handles parameterized queries
+- Never use string concatenation for queries
+- Never use raw SQL (except migrations)
+
+**XSS Prevention:**
+- React auto-escapes JSX
+- Never use `dangerouslySetInnerHTML`
+- Sanitize user input if needed
+
+**CSRF Protection:**
+- SameSite=Strict cookies
+- No state-changing GET requests
+- Origin validation on backend
+
+---
+
+## 9. PERFORMANCE REQUIREMENTS
+
+### Frontend Performance
+
+**Core Web Vitals:**
+- Largest Contentful Paint (LCP) < 2.5s
+- First Input Delay (FID) < 100ms
+- Cumulative Layout Shift (CLS) < 0.1
+
+**Loading Performance:**
+- First Contentful Paint < 1.5s
+- Time to Interactive < 3s
+- Speed Index < 3s
+
+**Optimization Techniques:**
+- Server-side rendering (SSR)
+- Static generation where possible
+- Image optimization (next/image)
+- Code splitting
+- Lazy loading components
+
+**Lighthouse Score:**
+- Performance: > 90
+- Accessibility: > 90
+- Best Practices: > 90
+- SEO: > 90
+
+---
+
+### Backend Performance
+
+**Response Times:**
+- GET /tasks (list): < 100ms (95th percentile)
+- GET /tasks/{id}: < 50ms (95th percentile)
+- POST /tasks: < 150ms (95th percentile)
+- PUT /tasks/{id}: < 150ms (95th percentile)
+- DELETE /tasks/{id}: < 100ms (95th percentile)
+
+**Database Optimization:**
+- Indexes on frequently queried columns
+- Query result caching (where appropriate)
+- Pagination for large result sets
+- Efficient JOIN operations
+
+**Connection Pooling:**
+```python
+# SQLModel async engine with pooling
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30
+)
+```
+
+---
+
+### Database Performance
+
+**Indexes (Required):**
+```sql
+-- Primary keys (automatic)
+CREATE UNIQUE INDEX pk_users ON users(id);
+CREATE UNIQUE INDEX pk_tasks ON tasks(id);
+
+-- Foreign keys
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+
+-- Frequently filtered columns
+CREATE INDEX idx_tasks_completed ON tasks(completed);
+CREATE INDEX idx_tasks_created_at ON tasks(created_at);
+
+-- Unique constraints
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+```
+
+**Query Optimization:**
+- Use SELECT specific columns (not SELECT *)
+- Use LIMIT for pagination
+- Avoid N+1 queries (use JOIN or eager loading)
+- Analyze slow queries with EXPLAIN
+
+**Neon Serverless Benefits:**
+- Auto-scaling connections
+- Instant cold starts
+- Automatic backups
+- Connection pooling built-in
+
+---
+
+## 10. API ENDPOINTS (Required)
+
+### Task Endpoints
+
+All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+
+---
+
+#### 1. List User's Tasks
+
+**Endpoint:** `GET /api/{user_id}/tasks`
+
+**Description:** Retrieve all tasks for the authenticated user.
+
+**Authorization:** User ID in URL must match user ID in JWT token.
+
+**Request:**
+```http
+GET /api/550e8400-e29b-41d4-a716-446655440000/tasks HTTP/1.1
+Authorization: Bearer <jwt_token>
+```
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": 1,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Write constitution",
+    "description": "Define architectural principles",
+    "completed": false,
+    "created_at": "2026-01-01T12:00:00Z",
+    "updated_at": "2026-01-01T12:00:00Z"
+  },
+  {
+    "id": 2,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Implement auth",
+    "description": "JWT authentication with Better Auth",
+    "completed": true,
+    "created_at": "2026-01-01T13:00:00Z",
+    "updated_at": "2026-01-01T14:00:00Z"
+  }
+]
+```
+
+**Error Responses:**
+- 401 Unauthorized - Invalid/missing token
+- 403 Forbidden - URL user_id doesn't match token user_id
+
+---
+
+#### 2. Create Task
+
+**Endpoint:** `POST /api/{user_id}/tasks`
+
+**Description:** Create a new task for the authenticated user.
+
+**Authorization:** User ID in URL must match user ID in JWT token.
+
+**Request:**
+```http
+POST /api/550e8400-e29b-41d4-a716-446655440000/tasks HTTP/1.1
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 3,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints",
+  "completed": false,
+  "created_at": "2026-01-01T15:00:00Z",
+  "updated_at": "2026-01-01T15:00:00Z"
+}
+```
+
+**Validation:**
+- `title`: Required, max 200 characters
+- `description`: Optional, max 1000 characters
+
+**Error Responses:**
+- 400 Bad Request - Validation error
+- 401 Unauthorized - Invalid/missing token
+- 403 Forbidden - URL user_id doesn't match token user_id
+
+---
+
+#### 3. Get Single Task
+
+**Endpoint:** `GET /api/{user_id}/tasks/{id}`
+
+**Description:** Retrieve a specific task by ID.
+
+**Authorization:** User ID in URL must match user ID in JWT token. Task must belong to user.
+
+**Request:**
+```http
+GET /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Authorization: Bearer <jwt_token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Write constitution",
+  "description": "Define architectural principles",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z"
+}
+```
+
+**Error Responses:**
+- 401 Unauthorized - Invalid/missing token
+- 403 Forbidden - URL user_id doesn't match token user_id
+- 404 Not Found - Task doesn't exist or doesn't belong to user
+
+---
+
+#### 4. Update Task
+
+**Endpoint:** `PUT /api/{user_id}/tasks/{id}`
+
+**Description:** Update all fields of a specific task.
+
+**Authorization:** User ID in URL must match user ID in JWT token. Task must belong to user.
+
+**Request:**
+```http
+PUT /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "title": "Write comprehensive constitution",
+  "description": "Define architectural principles and quality standards",
+  "completed": true
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Write comprehensive constitution",
+  "description": "Define architectural principles and quality standards",
+  "completed": true,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T16:00:00Z"
+}
+```
+
+**Validation:**
+- `title`: Required, max 200 characters
+- `description`: Optional, max 1000 characters
+- `completed`: Required, boolean
+
+**Error Responses:**
+- 400 Bad Request - Validation error
+- 401 Unauthorized - Invalid/missing token
+- 403 Forbidden - URL user_id doesn't match token user_id
+- 404 Not Found - Task doesn't exist or doesn't belong to user
+
+---
+
+#### 5. Delete Task
+
+**Endpoint:** `DELETE /api/{user_id}/tasks/{id}`
+
+**Description:** Delete a specific task.
+
+**Authorization:** User ID in URL must match user ID in JWT token. Task must belong to user.
+
+**Request:**
+```http
+DELETE /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Authorization: Bearer <jwt_token>
+```
+
+**Response (204 No Content):**
+```
+(empty body)
+```
+
+**Error Responses:**
+- 401 Unauthorized - Invalid/missing token
+- 403 Forbidden - URL user_id doesn't match token user_id
+- 404 Not Found - Task doesn't exist or doesn't belong to user
+
+---
+
+#### 6. Toggle Task Completion
+
+**Endpoint:** `PATCH /api/{user_id}/tasks/{id}/complete`
+
+**Description:** Toggle the completion status of a specific task.
+
+**Authorization:** User ID in URL must match user ID in JWT token. Task must belong to user.
+
+**Request:**
+```http
+PATCH /api/550e8400-e29b-41d4-a716-446655440000/tasks/1/complete HTTP/1.1
+Authorization: Bearer <jwt_token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Write constitution",
+  "description": "Define architectural principles",
+  "completed": true,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T17:00:00Z"
+}
+```
+
+**Behavior:**
+- If `completed` was `false`, set to `true`
+- If `completed` was `true`, set to `false`
+- Update `updated_at` timestamp
+
+**Error Responses:**
+- 401 Unauthorized - Invalid/missing token
+- 403 Forbidden - URL user_id doesn't match token user_id
+- 404 Not Found - Task doesn't exist or doesn't belong to user
+
+---
+
+## 11. DEVELOPMENT WORKFLOW
+
+### SpecKit Plus Workflow
+
+**Phase 1: Specify**
+```bash
+# Use sp.specify to create feature specification
+# Input: Feature description
+# Output: specs/features/[feature].md
+```
+
+**Phase 2: Plan**
+```bash
+# Use sp.plan to create implementation plan
+# Input: Feature specification
+# Output: specs/plans/[feature]-plan.md
+```
+
+**Phase 3: Tasks**
+```bash
+# Use sp.tasks to break plan into tasks
+# Input: Implementation plan
+# Output: specs/tasks/[feature]-tasks.md
+```
+
+**Phase 4: Implement**
+```bash
+# Use Claude Code to implement tasks
+# Follow specifications exactly
+# Generate code from specs
+```
+
+**Phase 5: Test**
+```bash
+# Validate against acceptance criteria
+# Run automated tests
+# Verify quality gates
+```
+
+---
+
+### Git Workflow
+
+**Branches:**
+- `main` - Production-ready code
+- `feature/*` - Feature branches
+- `fix/*` - Bug fix branches
+
+**Commits:**
+- Follow Conventional Commits specification
+- Format: `type(scope): description`
+- Types: feat, fix, docs, style, refactor, test, chore
+
+**Examples:**
+```
+feat(auth): implement JWT authentication
+fix(tasks): correct task deletion authorization
+docs(api): update API endpoint documentation
+test(auth): add integration tests for login flow
+```
+
+---
+
+## 12. DEPLOYMENT
+
+### Environment Variables
+
+**Shared:**
+```bash
+BETTER_AUTH_SECRET=<32+ character secret key>
+DATABASE_URL=postgresql+asyncpg://user:pass@host/db
+```
+
+**Frontend (.env.local):**
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NODE_ENV=development
+```
+
+**Backend (.env):**
+```bash
+DATABASE_URL=postgresql+asyncpg://...
+CORS_ORIGINS=http://localhost:3000
+BETTER_AUTH_SECRET=<same as frontend>
+```
+
+---
+
+### Production Checklist
+
+**Security:**
+- [ ] All secrets in environment variables (not hardcoded)
+- [ ] HTTPS enabled (Secure cookie flag)
+- [ ] CORS origins restricted
+- [ ] Rate limiting enabled
+- [ ] Input validation on all endpoints
+
+**Performance:**
+- [ ] Database indexes created
+- [ ] Connection pooling configured
+- [ ] Static assets optimized
+- [ ] Caching headers set
+
+**Quality:**
+- [ ] All tests passing
+- [ ] No console errors
+- [ ] Lighthouse score > 90
+- [ ] Error monitoring enabled
+
+---
+
+## GOVERNANCE
+
+### Amendment Process
+
+**Version Bump Rules:**
+- MAJOR: Breaking changes to API or architecture
+- MINOR: New features or sections added
+- PATCH: Clarifications, typo fixes, non-breaking updates
+
+**Amendment Workflow:**
+1. Propose change with rationale
+2. Document impact on existing code
+3. Update version number
+4. Update last amended date
+5. Commit with message: `docs: amend constitution to v{version}`
+
+---
+
+### Compliance
+
+**Mandatory Compliance:**
+- All specifications MUST follow this constitution
+- All implementations MUST validate against specs
+- All pull requests MUST verify constitution compliance
+
+**Violation Handling:**
+- Unjustified complexity is rejected
+- Spec-first violations require rework
+- Security violations block merge
+
+---
+
+### Enforcement
+
+**Automated Checks:**
+- Linting and formatting (pre-commit hooks)
+- Type checking (CI/CD)
+- Test coverage (CI/CD)
+- Security scanning (CI/CD)
+
+**Manual Reviews:**
+- Specification completeness
+- Architectural decision rationale
+- Code quality and maintainability
+
+---
+
+**END OF CONSTITUTION**
+
+This constitution supersedes all other development practices for Phase II. All work MUST comply with the principles, standards, and constraints defined herein.

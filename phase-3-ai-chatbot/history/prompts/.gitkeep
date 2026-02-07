@@ -1,0 +1,8 @@
+# Phase 2 - Web App History
+
+This directory will contain Prompt History Records (PHRs) for Phase 2 web app development.
+
+PHRs will be organized in subdirectories:
+- constitution/ - Constitution and project principles
+- <feature-name>/ - Feature-specific prompts
+- general/ - General development prompts

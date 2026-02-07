@@ -1,0 +1,2223 @@
+# Phase II Todo Application - Task Breakdown
+
+**Document Type:** Task List (Step-by-step implementation)
+**Phase:** II - Full-Stack Web Application
+**Version:** 1.0.0
+**Date:** 2026-01-01
+**Status:** Ready for Execution
+
+---
+
+## TASK OVERVIEW
+
+This document breaks down the Phase II implementation into concrete, actionable tasks. Each task has:
+- **ID**: Unique identifier
+- **Title**: Brief description
+- **Category**: Backend, Frontend, Integration, or DevOps
+- **Priority**: P0 (Critical), P1 (High), P2 (Medium)
+- **Dependencies**: Tasks that must be completed first
+- **Acceptance Criteria**: How to verify task completion
+- **Implementation Notes**: Technical guidance
+
+**Total Tasks**: 40
+- Backend: 15 tasks
+- Frontend: 15 tasks
+- Integration: 6 tasks
+- DevOps: 4 tasks
+
+---
+
+## PHASE 1: BACKEND FOUNDATION (Tasks 1-15)
+
+### Task 1: Initialize Backend Project Structure
+
+**ID**: BACK-001
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: None
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Create the FastAPI project structure with all necessary directories and configuration files.
+
+**Acceptance Criteria:**
+- [ ] `backend/` directory created
+- [ ] Directory structure matches plan:
+  ```
+  backend/
+  ├── main.py
+  ├── models.py
+  ├── schemas.py
+  ├── db.py
+  ├── config.py
+  ├── middleware/
+  │   └── auth.py
+  ├── routes/
+  │   └── tasks.py
+  ├── tests/
+  │   ├── __init__.py
+  │   ├── conftest.py
+  │   ├── test_models.py
+  │   ├── test_auth.py
+  │   └── test_tasks.py
+  ├── .env.example
+  ├── .gitignore
+  ├── pyproject.toml
+  └── requirements.txt
+  ```
+- [ ] `.gitignore` includes: `.env`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.venv/`
+
+**Implementation Notes:**
+```bash
+cd phase-2-web-app
+mkdir -p backend/middleware backend/routes backend/tests
+touch backend/{main.py,models.py,schemas.py,db.py,config.py}
+touch backend/middleware/auth.py
+touch backend/routes/tasks.py
+touch backend/tests/{__init__.py,conftest.py,test_models.py,test_auth.py,test_tasks.py}
+```
+
+---
+
+### Task 2: Configure Dependencies
+
+**ID**: BACK-002
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-001
+**Estimated Effort**: 10 minutes
+
+**Description:**
+Create `requirements.txt` with all necessary Python packages.
+
+**Acceptance Criteria:**
+- [ ] `requirements.txt` created with:
+  ```
+  fastapi==0.109.0
+  uvicorn[standard]==0.27.0
+  sqlmodel==0.0.14
+  asyncpg==0.29.0
+  pydantic==2.5.3
+  pydantic-settings==2.1.0
+  python-jose[cryptography]==3.3.0
+  python-multipart==0.0.6
+  passlib[bcrypt]==1.7.4
+  pytest==7.4.4
+  pytest-asyncio==0.23.3
+  pytest-cov==4.1.0
+  httpx==0.26.0
+  ```
+- [ ] Dependencies install successfully: `uv pip install -r requirements.txt`
+
+**Implementation Notes:**
+- Use UV for faster package installation
+- Lock versions for reproducibility
+- Include test dependencies
+
+---
+
+### Task 3: Configure Environment Variables
+
+**ID**: BACK-003
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-001
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Create configuration module for environment variables.
+
+**Acceptance Criteria:**
+- [ ] `config.py` created with Pydantic Settings:
+  ```python
+  from pydantic_settings import BaseSettings
+
+  class Settings(BaseSettings):
+      DATABASE_URL: str
+      BETTER_AUTH_SECRET: str
+      CORS_ORIGINS: str = "http://localhost:3000"
+      DEBUG: bool = False
+
+      class Config:
+          env_file = ".env"
+
+  settings = Settings()
+  ```
+- [ ] `.env.example` created with placeholders:
+  ```
+  DATABASE_URL=postgresql+asyncpg://user:pass@host/db
+  BETTER_AUTH_SECRET=your-32-character-secret-key-here
+  CORS_ORIGINS=http://localhost:3000
+  DEBUG=True
+  ```
+- [ ] `.env` added to `.gitignore`
+
+**Implementation Notes:**
+- Use pydantic-settings for type-safe config
+- Never commit `.env` to git
+- Generate BETTER_AUTH_SECRET: `openssl rand -hex 32`
+
+---
+
+### Task 4: Create Database Connection Module
+
+**ID**: BACK-004
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-003
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Implement async database connection with connection pooling.
+
+**Acceptance Criteria:**
+- [ ] `db.py` implements:
+  - Async engine creation with proper pool settings
+  - `get_db()` dependency function
+  - Session management with commit/rollback
+- [ ] Code matches specification from plan
+- [ ] Connection pooling configured: pool_size=10, max_overflow=20
+
+**Implementation Code:**
+```python
+from sqlmodel import create_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import sessionmaker
+from config import settings
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DEBUG,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30
+)
+
+async_session = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+async def get_db():
+    async with async_session() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+```
+
+---
+
+### Task 5: Create Database Models
+
+**ID**: BACK-005
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-004
+**Estimated Effort**: 25 minutes
+
+**Description:**
+Implement SQLModel models for User and Task.
+
+**Acceptance Criteria:**
+- [ ] `models.py` contains User and Task models
+- [ ] Models match specification exactly:
+  - User: id (str), email (str unique), name (str), hashed_password (str), created_at (datetime)
+  - Task: id (int auto), user_id (str FK), title (str 200), description (str 1000), completed (bool), created_at, updated_at
+- [ ] Relationships defined (User ↔ Tasks)
+- [ ] Indexes specified: user_id, completed, created_at
+- [ ] Type hints complete
+
+**Implementation Code:**
+```python
+from datetime import datetime
+from typing import Optional
+from sqlmodel import Field, SQLModel, Relationship
+
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+    id: str = Field(primary_key=True)
+    email: str = Field(unique=True, index=True, max_length=255)
+    name: str = Field(max_length=100)
+    hashed_password: str = Field(max_length=255)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    tasks: list["Task"] = Relationship(back_populates="user", cascade_delete=True)
+
+class Task(SQLModel, table=True):
+    __tablename__ = "tasks"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str = Field(foreign_key="users.id", index=True)
+    title: str = Field(max_length=200)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    completed: bool = Field(default=False, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    user: User = Relationship(back_populates="tasks")
+```
+
+---
+
+### Task 6: Create Pydantic Schemas
+
+**ID**: BACK-006
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-005
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Implement request/response schemas with validation.
+
+**Acceptance Criteria:**
+- [ ] `schemas.py` contains: TaskCreate, TaskUpdate, TaskResponse
+- [ ] Validators enforce:
+  - Title: not empty, max 200 chars
+  - Description: max 1000 chars
+- [ ] TaskResponse includes all fields with proper types
+- [ ] Custom validators trim whitespace
+
+**Implementation Code:**
+```python
+from datetime import datetime
+from typing import Optional
+from pydantic import BaseModel, Field, validator
+
+class TaskCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+
+    @validator('title')
+    def title_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Title cannot be empty')
+        return v.strip()
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    completed: Optional[bool] = None
+
+    @validator('title')
+    def title_must_not_be_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Title cannot be empty')
+        return v.strip() if v else None
+
+class TaskResponse(BaseModel):
+    id: int
+    user_id: str
+    title: str
+    description: Optional[str]
+    completed: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+```
+
+---
+
+### Task 7: Implement JWT Verification Middleware
+
+**ID**: BACK-007
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-003
+**Estimated Effort**: 25 minutes
+
+**Description:**
+Create middleware to verify JWT tokens and extract user_id.
+
+**Acceptance Criteria:**
+- [ ] `middleware/auth.py` implements `verify_jwt()` dependency
+- [ ] Extracts token from Authorization header
+- [ ] Verifies signature with BETTER_AUTH_SECRET
+- [ ] Extracts user_id from 'sub' claim
+- [ ] Raises 401 for invalid/expired tokens
+- [ ] Returns user_id string
+
+**Implementation Code:**
+```python
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from config import settings
+
+security = HTTPBearer()
+
+async def verify_jwt(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> str:
+    """Verify JWT token and extract user_id."""
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.BETTER_AUTH_SECRET,
+            algorithms=["HS256"]
+        )
+
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token: missing user ID"
+            )
+
+        return user_id
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
+```
+
+---
+
+### Task 8: Implement List Tasks Endpoint
+
+**ID**: BACK-008
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-005, BACK-006, BACK-007
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Create GET /api/{user_id}/tasks endpoint with filtering.
+
+**Acceptance Criteria:**
+- [ ] Endpoint created in `routes/tasks.py`
+- [ ] Accepts status query param: "all", "pending", "completed"
+- [ ] Verifies JWT token
+- [ ] Checks user_id match (403 if mismatch)
+- [ ] Filters tasks by user_id and status
+- [ ] Orders by created_at DESC
+- [ ] Returns array of TaskResponse
+
+**Implementation Code:**
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+from typing import List
+from models import Task
+from schemas import TaskResponse
+from middleware.auth import verify_jwt
+from db import get_db
+
+router = APIRouter()
+
+@router.get("", response_model=List[TaskResponse])
+async def list_tasks(
+    user_id: str,
+    status: str = "all",
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    query = select(Task).where(Task.user_id == user_id)
+
+    if status == "pending":
+        query = query.where(Task.completed == False)
+    elif status == "completed":
+        query = query.where(Task.completed == True)
+
+    query = query.order_by(Task.created_at.desc())
+
+    result = await db.execute(query)
+    tasks = result.scalars().all()
+
+    return tasks
+```
+
+---
+
+### Task 9: Implement Create Task Endpoint
+
+**ID**: BACK-009
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-008
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Create POST /api/{user_id}/tasks endpoint.
+
+**Acceptance Criteria:**
+- [ ] Endpoint accepts TaskCreate schema
+- [ ] Verifies JWT and user_id match
+- [ ] Creates task with user_id from token
+- [ ] Returns 201 Created with TaskResponse
+- [ ] Sets completed=False by default
+
+**Implementation Code:**
+```python
+@router.post("", response_model=TaskResponse, status_code=201)
+async def create_task(
+    user_id: str,
+    task_data: TaskCreate,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    task = Task(
+        user_id=user_id,
+        title=task_data.title,
+        description=task_data.description,
+        completed=False
+    )
+
+    db.add(task)
+    await db.commit()
+    await db.refresh(task)
+
+    return task
+```
+
+---
+
+### Task 10: Implement Get Task Endpoint
+
+**ID**: BACK-010
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-008
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Create GET /api/{user_id}/tasks/{id} endpoint.
+
+**Acceptance Criteria:**
+- [ ] Endpoint retrieves single task by ID
+- [ ] Verifies JWT and user_id match
+- [ ] Returns 404 if task not found or doesn't belong to user
+- [ ] Returns TaskResponse
+
+**Implementation Code:**
+```python
+@router.get("/{task_id}", response_model=TaskResponse)
+async def get_task(
+    user_id: str,
+    task_id: int,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return task
+```
+
+---
+
+### Task 11: Implement Update Task Endpoint
+
+**ID**: BACK-011
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-010
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Create PUT /api/{user_id}/tasks/{id} endpoint.
+
+**Acceptance Criteria:**
+- [ ] Endpoint accepts TaskUpdate schema
+- [ ] Verifies JWT and user_id match
+- [ ] Updates only provided fields
+- [ ] Updates updated_at timestamp
+- [ ] Returns 404 if task not found
+- [ ] Returns updated TaskResponse
+
+**Implementation Code:**
+```python
+from datetime import datetime
+
+@router.put("/{task_id}", response_model=TaskResponse)
+async def update_task(
+    user_id: str,
+    task_id: int,
+    task_data: TaskUpdate,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task_data.title is not None:
+        task.title = task_data.title
+    if task_data.description is not None:
+        task.description = task_data.description
+    if task_data.completed is not None:
+        task.completed = task_data.completed
+
+    task.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(task)
+
+    return task
+```
+
+---
+
+### Task 12: Implement Delete Task Endpoint
+
+**ID**: BACK-012
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-010
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Create DELETE /api/{user_id}/tasks/{id} endpoint.
+
+**Acceptance Criteria:**
+- [ ] Endpoint deletes task by ID
+- [ ] Verifies JWT and user_id match
+- [ ] Returns 404 if task not found
+- [ ] Returns success message
+
+**Implementation Code:**
+```python
+@router.delete("/{task_id}")
+async def delete_task(
+    user_id: str,
+    task_id: int,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    await db.delete(task)
+    await db.commit()
+
+    return {"message": "Task deleted"}
+```
+
+---
+
+### Task 13: Implement Toggle Complete Endpoint
+
+**ID**: BACK-013
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-010
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Create PATCH /api/{user_id}/tasks/{id}/complete endpoint.
+
+**Acceptance Criteria:**
+- [ ] Endpoint toggles completed boolean
+- [ ] Verifies JWT and user_id match
+- [ ] Updates updated_at timestamp
+- [ ] Returns 404 if task not found
+- [ ] Returns updated TaskResponse
+
+**Implementation Code:**
+```python
+@router.patch("/{task_id}/complete", response_model=TaskResponse)
+async def toggle_complete(
+    user_id: str,
+    task_id: int,
+    current_user: str = Depends(verify_jwt),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    query = select(Task).where(
+        Task.id == task_id,
+        Task.user_id == user_id
+    )
+    result = await db.execute(query)
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.completed = not task.completed
+    task.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(task)
+
+    return task
+```
+
+---
+
+### Task 14: Configure FastAPI App
+
+**ID**: BACK-014
+**Category**: Backend
+**Priority**: P0
+**Dependencies**: BACK-008 through BACK-013
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Set up FastAPI app with CORS, routers, and health check.
+
+**Acceptance Criteria:**
+- [ ] `main.py` creates FastAPI app
+- [ ] CORS middleware configured with proper settings
+- [ ] Tasks router registered at `/api/{user_id}/tasks`
+- [ ] Health check endpoint at `/health`
+- [ ] Lifespan context manager for startup/shutdown
+
+**Implementation Code:**
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from config import settings
+from routes import tasks
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting up...")
+    yield
+    print("Shutting down...")
+
+app = FastAPI(
+    title="Todo API",
+    version="2.0.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(
+    tasks.router,
+    prefix="/api/{user_id}/tasks",
+    tags=["tasks"]
+)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+```
+
+---
+
+### Task 15: Write Backend Tests
+
+**ID**: BACK-015
+**Category**: Backend
+**Priority**: P1
+**Dependencies**: BACK-014
+**Estimated Effort**: 2 hours
+
+**Description:**
+Create comprehensive test suite for backend.
+
+**Acceptance Criteria:**
+- [ ] Test coverage > 90%
+- [ ] Tests for all endpoints
+- [ ] Tests for JWT verification
+- [ ] Tests for authorization (user_id mismatch)
+- [ ] Tests for validation errors
+- [ ] All tests passing
+
+**Test Structure:**
+```python
+# tests/conftest.py
+import pytest
+from httpx import AsyncClient
+from main import app
+
+@pytest.fixture
+async def client():
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+@pytest.fixture
+def auth_headers():
+    # Mock JWT token for testing
+    return {"Authorization": "Bearer test-token"}
+
+# tests/test_tasks.py
+@pytest.mark.asyncio
+async def test_list_tasks(client, auth_headers):
+    response = await client.get("/api/user-123/tasks", headers=auth_headers)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+@pytest.mark.asyncio
+async def test_create_task(client, auth_headers):
+    response = await client.post(
+        "/api/user-123/tasks",
+        json={"title": "Test task", "description": "Test"},
+        headers=auth_headers
+    )
+    assert response.status_code == 201
+    assert response.json()["title"] == "Test task"
+
+# ... more tests
+```
+
+---
+
+## PHASE 2: FRONTEND FOUNDATION (Tasks 16-30)
+
+### Task 16: Initialize Frontend Project
+
+**ID**: FRONT-001
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: None
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Create Next.js project with TypeScript and Tailwind CSS.
+
+**Acceptance Criteria:**
+- [ ] Next.js 16+ initialized with App Router
+- [ ] TypeScript configured (strict mode)
+- [ ] Tailwind CSS installed and configured
+- [ ] Directory structure created:
+  ```
+  frontend/
+  ├── src/
+  │   ├── app/
+  │   │   ├── layout.tsx
+  │   │   ├── page.tsx
+  │   │   ├── login/
+  │   │   │   └── page.tsx
+  │   │   ├── signup/
+  │   │   │   └── page.tsx
+  │   │   └── api/
+  │   │       └── auth/
+  │   │           └── [...route]/
+  │   │               └── route.ts
+  │   ├── components/
+  │   │   ├── Header.tsx
+  │   │   ├── TaskList.tsx
+  │   │   ├── TaskItem.tsx
+  │   │   ├── TaskForm.tsx
+  │   │   ├── LoginForm.tsx
+  │   │   └── SignupForm.tsx
+  │   └── lib/
+  │       ├── api.ts
+  │       ├── auth.ts
+  │       └── types.ts
+  ├── public/
+  ├── .env.local
+  ├── .env.example
+  ├── .gitignore
+  ├── package.json
+  ├── tsconfig.json
+  ├── tailwind.config.js
+  └── next.config.js
+  ```
+
+**Implementation Commands:**
+```bash
+cd phase-2-web-app
+npx create-next-app@latest frontend --typescript --tailwind --app --no-src-dir
+cd frontend
+npm install better-auth
+mkdir -p src/components src/lib
+```
+
+---
+
+### Task 17: Configure TypeScript
+
+**ID**: FRONT-002
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-001
+**Estimated Effort**: 10 minutes
+
+**Description:**
+Set up TypeScript with strict mode.
+
+**Acceptance Criteria:**
+- [ ] `tsconfig.json` has strict: true
+- [ ] No TypeScript errors in initial setup
+- [ ] Path aliases configured (@/ for src/)
+
+**Implementation:**
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+```
+
+---
+
+### Task 18: Create TypeScript Types
+
+**ID**: FRONT-003
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-002
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Define TypeScript types for all data structures.
+
+**Acceptance Criteria:**
+- [ ] `lib/types.ts` contains all types
+- [ ] Types match backend schemas exactly
+- [ ] Exported for use in components
+
+**Implementation Code:**
+```typescript
+// lib/types.ts
+export interface User {
+  id: string
+  email: string
+  name: string
+  created_at: string
+}
+
+export interface Task {
+  id: number
+  user_id: string
+  title: string
+  description: string | null
+  completed: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface TaskCreate {
+  title: string
+  description?: string
+}
+
+export interface TaskUpdate {
+  title?: string
+  description?: string
+  completed?: boolean
+}
+
+export interface ApiError {
+  detail: string
+}
+```
+
+---
+
+### Task 19: Configure Better Auth
+
+**ID**: FRONT-004
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-001
+**Estimated Effort**: 25 minutes
+
+**Description:**
+Set up Better Auth with JWT plugin.
+
+**Acceptance Criteria:**
+- [ ] `lib/auth.ts` configures Better Auth client
+- [ ] JWT plugin enabled with 7-day expiry
+- [ ] httpOnly cookies configured
+- [ ] Helper functions: getUser(), logout()
+- [ ] API routes created at `/api/auth/[...route]`
+
+**Implementation Code:**
+```typescript
+// lib/auth.ts
+import { createAuthClient } from 'better-auth'
+
+export const authClient = createAuthClient({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  plugins: {
+    jwt: {
+      secret: process.env.BETTER_AUTH_SECRET!,
+      expiresIn: '7d',
+      cookieOptions: {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  }
+})
+
+export async function getUser() {
+  const session = await authClient.getSession()
+  return session?.user
+}
+
+export async function logout() {
+  await authClient.signOut()
+}
+
+// app/api/auth/[...route]/route.ts
+import { authClient } from '@/lib/auth'
+export const { GET, POST } = authClient.handler()
+```
+
+---
+
+### Task 20: Create API Client
+
+**ID**: FRONT-005
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-003, FRONT-004
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Implement API client with JWT injection and error handling.
+
+**Acceptance Criteria:**
+- [ ] `lib/api.ts` implements all 6 endpoint functions
+- [ ] Automatic cookie sending (credentials: 'include')
+- [ ] 401 errors redirect to login
+- [ ] Error messages extracted from response
+- [ ] All functions type-safe
+
+**Implementation Code:**
+```typescript
+// lib/api.ts
+import type { Task, TaskCreate, TaskUpdate } from './types'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  const response = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+  if (response.status === 401) {
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'API error')
+  }
+
+  return response
+}
+
+export const api = {
+  async getTasks(userId: string, status?: string): Promise<Task[]> {
+    const query = status ? `?status=${status}` : ''
+    const response = await fetchWithAuth(`/api/${userId}/tasks${query}`)
+    return response.json()
+  },
+
+  async getTask(userId: string, taskId: number): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks/${taskId}`)
+    return response.json()
+  },
+
+  async createTask(userId: string, data: TaskCreate): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    return response.json()
+  },
+
+  async updateTask(userId: string, taskId: number, data: TaskUpdate): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+    return response.json()
+  },
+
+  async deleteTask(userId: string, taskId: number): Promise<void> {
+    await fetchWithAuth(`/api/${userId}/tasks/${taskId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async toggleComplete(userId: string, taskId: number): Promise<Task> {
+    const response = await fetchWithAuth(`/api/${userId}/tasks/${taskId}/complete`, {
+      method: 'PATCH',
+    })
+    return response.json()
+  },
+}
+```
+
+---
+
+### Task 21: Create Header Component
+
+**ID**: FRONT-006
+**Category**: Frontend
+**Priority**: P1
+**Dependencies**: FRONT-004
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Build app header with user menu and logout.
+
+**Acceptance Criteria:**
+- [ ] Header displays app title
+- [ ] Shows user name when logged in
+- [ ] Logout button functional
+- [ ] Responsive design
+- [ ] Tailwind CSS styling
+
+**Implementation Code:**
+```typescript
+// components/Header.tsx
+'use client'
+
+import { logout } from '@/lib/auth'
+import { useRouter } from 'next/navigation'
+import type { User } from '@/lib/types'
+
+interface Props {
+  user?: User
+}
+
+export default function Header({ user }: Props) {
+  const router = useRouter()
+
+  async function handleLogout() {
+    await logout()
+    router.push('/login')
+  }
+
+  return (
+    <header className="bg-blue-600 text-white p-4">
+      <div className="container mx-auto flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Todo App</h1>
+        {user && (
+          <div className="flex items-center gap-4">
+            <span>Hello, {user.name}</span>
+            <button
+              onClick={handleLogout}
+              className="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  )
+}
+```
+
+---
+
+### Task 22: Create TaskItem Component
+
+**ID**: FRONT-007
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-005
+**Estimated Effort**: 45 minutes
+
+**Description:**
+Build individual task card with toggle, edit, delete.
+
+**Acceptance Criteria:**
+- [ ] Checkbox to toggle completion
+- [ ] Strikethrough when completed
+- [ ] Edit and Delete buttons
+- [ ] Confirmation before delete
+- [ ] Loading states
+- [ ] Error handling
+
+**Implementation Code:**
+```typescript
+// components/TaskItem.tsx
+'use client'
+
+import { useState } from 'react'
+import { api } from '@/lib/api'
+import type { Task } from '@/lib/types'
+
+interface Props {
+  task: Task
+  userId: string
+  onUpdate: (task: Task) => void
+  onDelete: (taskId: number) => void
+}
+
+export default function TaskItem({ task, userId, onUpdate, onDelete }: Props) {
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleToggle() {
+    setIsLoading(true)
+    try {
+      const updated = await api.toggleComplete(userId, task.id)
+      onUpdate(updated)
+    } catch (error) {
+      console.error('Failed to toggle task:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Are you sure you want to delete this task?')) return
+
+    setIsLoading(true)
+    try {
+      await api.deleteTask(userId, task.id)
+      onDelete(task.id)
+    } catch (error) {
+      console.error('Failed to delete task:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-4 p-4 border rounded hover:bg-gray-50">
+      <input
+        type="checkbox"
+        checked={task.completed}
+        onChange={handleToggle}
+        disabled={isLoading}
+        className="w-5 h-5"
+      />
+      <div className="flex-1">
+        <h3 className={task.completed ? 'line-through text-gray-500' : ''}>
+          {task.title}
+        </h3>
+        {task.description && (
+          <p className="text-sm text-gray-600">{task.description}</p>
+        )}
+      </div>
+      <button
+        onClick={handleDelete}
+        disabled={isLoading}
+        className="text-red-600 hover:text-red-800 disabled:opacity-50"
+      >
+        Delete
+      </button>
+    </div>
+  )
+}
+```
+
+---
+
+### Task 23: Create TaskList Component
+
+**ID**: FRONT-008
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-007
+**Estimated Effort**: 40 minutes
+
+**Description:**
+Build task list with filtering and empty state.
+
+**Acceptance Criteria:**
+- [ ] Displays array of tasks
+- [ ] Filter tabs: All, Pending, Completed
+- [ ] Empty state message
+- [ ] Task count display
+- [ ] State management for updates
+
+**Implementation Code:**
+```typescript
+// components/TaskList.tsx
+'use client'
+
+import { useState } from 'react'
+import TaskItem from './TaskItem'
+import type { Task } from '@/lib/types'
+
+interface Props {
+  initialTasks: Task[]
+  userId: string
+}
+
+export default function TaskList({ initialTasks, userId }: Props) {
+  const [tasks, setTasks] = useState(initialTasks)
+  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all')
+
+  const filteredTasks = tasks.filter(task => {
+    if (filter === 'pending') return !task.completed
+    if (filter === 'completed') return task.completed
+    return true
+  })
+
+  function handleUpdate(updated: Task) {
+    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
+  }
+
+  function handleDelete(taskId: number) {
+    setTasks(prev => prev.filter(t => t.id !== taskId))
+  }
+
+  return (
+    <div>
+      <div className="flex gap-4 mb-4">
+        <button
+          onClick={() => setFilter('all')}
+          className={filter === 'all' ? 'font-bold' : ''}
+        >
+          All ({tasks.length})
+        </button>
+        <button
+          onClick={() => setFilter('pending')}
+          className={filter === 'pending' ? 'font-bold' : ''}
+        >
+          Pending ({tasks.filter(t => !t.completed).length})
+        </button>
+        <button
+          onClick={() => setFilter('completed')}
+          className={filter === 'completed' ? 'font-bold' : ''}
+        >
+          Completed ({tasks.filter(t => t.completed).length})
+        </button>
+      </div>
+
+      {filteredTasks.length === 0 ? (
+        <p className="text-gray-500 text-center py-8">
+          No tasks yet. Create your first task!
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {filteredTasks.map(task => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              userId={userId}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+### Task 24: Create TaskForm Component
+
+**ID**: FRONT-009
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-005
+**Estimated Effort**: 40 minutes
+
+**Description:**
+Build form to create/edit tasks.
+
+**Acceptance Criteria:**
+- [ ] Title input with validation
+- [ ] Description textarea
+- [ ] Character count display
+- [ ] Submit and Cancel buttons
+- [ ] Loading state
+- [ ] Error messages
+
+**Implementation Code:**
+```typescript
+// components/TaskForm.tsx
+'use client'
+
+import { useState } from 'react'
+import { api } from '@/lib/api'
+import type { Task, TaskCreate } from '@/lib/types'
+
+interface Props {
+  userId: string
+  task?: Task
+  onSubmit: (task: Task) => void
+  onCancel: () => void
+}
+
+export default function TaskForm({ userId, task, onSubmit, onCancel }: Props) {
+  const [title, setTitle] = useState(task?.title || '')
+  const [description, setDescription] = useState(task?.description || '')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+
+    if (!title.trim()) {
+      setError('Title is required')
+      return
+    }
+
+    if (title.length > 200) {
+      setError('Title must be 200 characters or less')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const data: TaskCreate = { title, description }
+      const result = await api.createTask(userId, data)
+      onSubmit(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create task')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block mb-2">
+          Title ({title.length}/200)
+        </label>
+        <input
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          className="w-full border p-2 rounded"
+          maxLength={200}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block mb-2">
+          Description ({description.length}/1000)
+        </label>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          className="w-full border p-2 rounded"
+          rows={4}
+          maxLength={1000}
+        />
+      </div>
+
+      {error && <p className="text-red-600">{error}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+        >
+          {isLoading ? 'Saving...' : 'Save'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="bg-gray-300 px-4 py-2 rounded"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+```
+
+---
+
+### Task 25: Create LoginForm Component
+
+**ID**: FRONT-010
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-004
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Build login form with validation.
+
+**Acceptance Criteria:**
+- [ ] Email and password inputs
+- [ ] Form validation
+- [ ] Submit button with loading state
+- [ ] Error message display
+- [ ] Link to signup page
+
+**Implementation Code:**
+```typescript
+// components/LoginForm.tsx
+'use client'
+
+import { useState } from 'react'
+import { authClient } from '@/lib/auth'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+export default function LoginForm() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
+
+    try {
+      await authClient.signIn.email({
+        email,
+        password
+      })
+      router.push('/')
+    } catch (err) {
+      setError('Invalid email or password')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto">
+      <div>
+        <label className="block mb-2">Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          className="w-full border p-2 rounded"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block mb-2">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          className="w-full border p-2 rounded"
+          required
+        />
+      </div>
+
+      {error && <p className="text-red-600">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+      >
+        {isLoading ? 'Logging in...' : 'Log In'}
+      </button>
+
+      <p className="text-center">
+        Don't have an account?{' '}
+        <Link href="/signup" className="text-blue-600">
+          Sign up
+        </Link>
+      </p>
+    </form>
+  )
+}
+```
+
+---
+
+### Task 26: Create SignupForm Component
+
+**ID**: FRONT-011
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-004
+**Estimated Effort**: 35 minutes
+
+**Description:**
+Build signup form with validation.
+
+**Acceptance Criteria:**
+- [ ] Name, email, password inputs
+- [ ] Password minimum 8 characters
+- [ ] Form validation
+- [ ] Submit button with loading state
+- [ ] Error message display
+- [ ] Link to login page
+
+**Implementation Code:**
+```typescript
+// components/SignupForm.tsx
+'use client'
+
+import { useState } from 'react'
+import { authClient } from '@/lib/auth'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+export default function SignupForm() {
+  const router = useRouter()
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await authClient.signUp.email({
+        name,
+        email,
+        password
+      })
+      router.push('/')
+    } catch (err) {
+      setError('Email already registered or invalid input')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-md mx-auto">
+      <div>
+        <label className="block mb-2">Name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="w-full border p-2 rounded"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block mb-2">Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          className="w-full border p-2 rounded"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block mb-2">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          className="w-full border p-2 rounded"
+          minLength={8}
+          required
+        />
+      </div>
+
+      {error && <p className="text-red-600">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="w-full bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+      >
+        {isLoading ? 'Creating account...' : 'Sign Up'}
+      </button>
+
+      <p className="text-center">
+        Already have an account?{' '}
+        <Link href="/login" className="text-blue-600">
+          Log in
+        </Link>
+      </p>
+    </form>
+  )
+}
+```
+
+---
+
+### Task 27: Create Login Page
+
+**ID**: FRONT-012
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-010
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Build login page.
+
+**Acceptance Criteria:**
+- [ ] Page at `/login`
+- [ ] Centers LoginForm component
+- [ ] Responsive design
+
+**Implementation Code:**
+```typescript
+// app/login/page.tsx
+import LoginForm from '@/components/LoginForm'
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
+        <h1 className="text-2xl font-bold mb-6 text-center">Log In</h1>
+        <LoginForm />
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### Task 28: Create Signup Page
+
+**ID**: FRONT-013
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-011
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Build signup page.
+
+**Acceptance Criteria:**
+- [ ] Page at `/signup`
+- [ ] Centers SignupForm component
+- [ ] Responsive design
+
+**Implementation Code:**
+```typescript
+// app/signup/page.tsx
+import SignupForm from '@/components/SignupForm'
+
+export default function SignupPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
+        <h1 className="text-2xl font-bold mb-6 text-center">Sign Up</h1>
+        <SignupForm />
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### Task 29: Create Home Page
+
+**ID**: FRONT-014
+**Category**: Frontend
+**Priority**: P0
+**Dependencies**: FRONT-006, FRONT-008
+**Estimated Effort**: 25 minutes
+
+**Description:**
+Build main task list page.
+
+**Acceptance Criteria:**
+- [ ] Server Component (SSR)
+- [ ] Fetches user and tasks
+- [ ] Redirects to login if not authenticated
+- [ ] Displays Header and TaskList
+
+**Implementation Code:**
+```typescript
+// app/page.tsx
+import { getUser } from '@/lib/auth'
+import { api } from '@/lib/api'
+import { redirect } from 'next/navigation'
+import Header from '@/components/Header'
+import TaskList from '@/components/TaskList'
+
+export default async function HomePage() {
+  const user = await getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const tasks = await api.getTasks(user.id)
+
+  return (
+    <div>
+      <Header user={user} />
+      <main className="container mx-auto p-4">
+        <h1 className="text-3xl font-bold mb-6">My Tasks</h1>
+        <TaskList initialTasks={tasks} userId={user.id} />
+      </main>
+    </div>
+  )
+}
+```
+
+---
+
+### Task 30: Write Frontend Tests
+
+**ID**: FRONT-015
+**Category**: Frontend
+**Priority**: P1
+**Dependencies**: FRONT-014
+**Estimated Effort**: 2 hours
+
+**Description:**
+Create test suite for frontend components.
+
+**Acceptance Criteria:**
+- [ ] Test coverage > 80%
+- [ ] Tests for all components
+- [ ] Tests for API client
+- [ ] Tests for auth flow
+- [ ] All tests passing
+
+**Test Structure:**
+```typescript
+// __tests__/components/TaskItem.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react'
+import TaskItem from '@/components/TaskItem'
+
+describe('TaskItem', () => {
+  const mockTask = {
+    id: 1,
+    user_id: 'user-123',
+    title: 'Test task',
+    description: 'Test description',
+    completed: false,
+    created_at: '2026-01-01T12:00:00Z',
+    updated_at: '2026-01-01T12:00:00Z'
+  }
+
+  it('renders task title', () => {
+    render(<TaskItem task={mockTask} userId="user-123" onUpdate={() => {}} onDelete={() => {}} />)
+    expect(screen.getByText('Test task')).toBeInTheDocument()
+  })
+
+  it('toggles completion on checkbox click', async () => {
+    const onUpdate = jest.fn()
+    render(<TaskItem task={mockTask} userId="user-123" onUpdate={onUpdate} onDelete={() => {}} />)
+
+    const checkbox = screen.getByRole('checkbox')
+    fireEvent.click(checkbox)
+
+    // Assert API call made and onUpdate called
+  })
+
+  // ... more tests
+})
+```
+
+---
+
+## PHASE 3: INTEGRATION (Tasks 31-36)
+
+### Task 31: Set Up Neon Database
+
+**ID**: INT-001
+**Category**: Integration
+**Priority**: P0
+**Dependencies**: None
+**Estimated Effort**: 20 minutes
+
+**Description:**
+Create Neon PostgreSQL database and get connection string.
+
+**Acceptance Criteria:**
+- [ ] Neon project created at https://neon.tech
+- [ ] Database named "todo-app-phase-ii"
+- [ ] Connection string obtained
+- [ ] Connection string converted to asyncpg format
+- [ ] Added to backend `.env` file
+
+**Steps:**
+1. Visit https://neon.tech and sign up/log in
+2. Click "Create Project"
+3. Name: "todo-app-phase-ii"
+4. Region: Select closest to you
+5. PostgreSQL version: 16
+6. Copy connection string
+7. Convert to: `postgresql+asyncpg://user:pass@host/db`
+8. Add to `.env`: `DATABASE_URL=postgresql+asyncpg://...`
+
+---
+
+### Task 32: Create Database Tables
+
+**ID**: INT-002
+**Category**: Integration
+**Priority**: P0
+**Dependencies**: INT-001, BACK-005
+**Estimated Effort**: 15 minutes
+
+**Description:**
+Create users and tasks tables in Neon database.
+
+**Acceptance Criteria:**
+- [ ] Tables created from SQLModel models
+- [ ] Indexes created
+- [ ] Foreign keys set up
+- [ ] Cascade delete configured
+
+**Implementation:**
+```python
+# create_tables.py
+import asyncio
+from sqlmodel import SQLModel
+from db import engine
+from models import User, Task
+
+async def create_tables():
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+    print("Tables created successfully")
+
+if __name__ == "__main__":
+    asyncio.run(create_tables())
+```
+
+**Run:**
+```bash
+cd backend
+python create_tables.py
+```
+
+---
+
+### Task 33: Test Authentication Flow
+
+**ID**: INT-003
+**Category**: Integration
+**Priority**: P0
+**Dependencies**: BACK-014, FRONT-014
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Test complete signup and login flows.
+
+**Acceptance Criteria:**
+- [ ] Signup creates user in database
+- [ ] JWT token generated and stored in cookie
+- [ ] Login verifies credentials and issues token
+- [ ] Logout clears cookie
+- [ ] Token verified on API requests
+
+**Test Cases:**
+1. Signup with valid data → account created, redirected to home
+2. Signup with duplicate email → error shown
+3. Login with valid credentials → redirected to home
+4. Login with invalid credentials → error shown
+5. Access protected page without login → redirected to login
+6. Logout → redirected to login, cookie cleared
+
+---
+
+### Task 34: Test Task CRUD Operations
+
+**ID**: INT-004
+**Category**: Integration
+**Priority**: P0
+**Dependencies**: INT-003
+**Estimated Effort**: 45 minutes
+
+**Description:**
+Test all task operations end-to-end.
+
+**Acceptance Criteria:**
+- [ ] Create task → appears in list
+- [ ] List tasks → only user's tasks shown
+- [ ] Get task → correct task returned
+- [ ] Update task → changes persisted
+- [ ] Delete task → removed from list
+- [ ] Toggle complete → status updated
+
+**Test Cases:**
+1. Create task with valid data → 201 Created
+2. Create task with empty title → 400 Bad Request
+3. List tasks → returns array
+4. Update task title → updated_at changes
+5. Delete task → task no longer in list
+6. Toggle complete → completed flips
+
+---
+
+### Task 35: Test User Isolation
+
+**ID**: INT-005
+**Category**: Integration
+**Priority**: P0
+**Dependencies**: INT-004
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Verify users cannot access other users' data.
+
+**Acceptance Criteria:**
+- [ ] User A cannot see User B's tasks
+- [ ] User A cannot update User B's tasks
+- [ ] User A cannot delete User B's tasks
+- [ ] 403 Forbidden returned for cross-user access
+
+**Test Cases:**
+1. Create 2 users (User A, User B)
+2. User A creates task
+3. User B tries to access User A's task → 403
+4. User B tries to update User A's task → 403
+5. User B tries to delete User A's task → 403
+
+---
+
+### Task 36: Performance Testing
+
+**ID**: INT-006
+**Category**: Integration
+**Priority**: P1
+**Dependencies**: INT-004
+**Estimated Effort**: 1 hour
+
+**Description:**
+Verify performance requirements are met.
+
+**Acceptance Criteria:**
+- [ ] API response times < 200ms (95th percentile)
+- [ ] Frontend load time < 3 seconds
+- [ ] Lighthouse score > 90
+- [ ] 100 concurrent users supported
+
+**Tools:**
+- Backend: Apache Bench, Locust
+- Frontend: Lighthouse, WebPageTest
+- Database: Neon query performance monitoring
+
+---
+
+## PHASE 4: DEPLOYMENT (Tasks 37-40)
+
+### Task 37: Deploy Backend to Railway
+
+**ID**: DEPLOY-001
+**Category**: DevOps
+**Priority**: P0
+**Dependencies**: BACK-015, INT-006
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Deploy FastAPI backend to Railway.
+
+**Acceptance Criteria:**
+- [ ] Railway project created
+- [ ] GitHub repo connected
+- [ ] Environment variables configured
+- [ ] Auto-deploy on push to main enabled
+- [ ] Health check passing
+- [ ] Public URL accessible
+
+**Steps:**
+1. Visit https://railway.app
+2. Create new project
+3. Connect GitHub repo
+4. Select `backend` directory
+5. Add environment variables:
+   - DATABASE_URL
+   - BETTER_AUTH_SECRET
+   - CORS_ORIGINS
+   - DEBUG=False
+6. Deploy
+7. Test `/health` endpoint
+
+---
+
+### Task 38: Deploy Frontend to Vercel
+
+**ID**: DEPLOY-002
+**Category**: DevOps
+**Priority**: P0
+**Dependencies**: FRONT-015, DEPLOY-001
+**Estimated Effort**: 25 minutes
+
+**Description:**
+Deploy Next.js frontend to Vercel.
+
+**Acceptance Criteria:**
+- [ ] Vercel project created
+- [ ] GitHub repo connected
+- [ ] Environment variables configured
+- [ ] Auto-deploy on push to main enabled
+- [ ] Custom domain configured (optional)
+- [ ] Site accessible
+
+**Steps:**
+1. Visit https://vercel.com
+2. New Project → Import Git Repository
+3. Select `frontend` directory
+4. Add environment variables:
+   - NEXT_PUBLIC_API_URL (Railway URL)
+   - BETTER_AUTH_SECRET
+5. Deploy
+6. Test site functionality
+
+---
+
+### Task 39: Set Up Monitoring
+
+**ID**: DEPLOY-003
+**Category**: DevOps
+**Priority**: P1
+**Dependencies**: DEPLOY-001, DEPLOY-002
+**Estimated Effort**: 30 minutes
+
+**Description:**
+Configure error monitoring and logging.
+
+**Acceptance Criteria:**
+- [ ] Backend errors logged
+- [ ] Frontend errors tracked
+- [ ] Uptime monitoring enabled
+- [ ] Alerts configured
+
+**Tools:**
+- Sentry for error tracking
+- Railway logs for backend
+- Vercel Analytics for frontend
+
+---
+
+### Task 40: Documentation and Handoff
+
+**ID**: DEPLOY-004
+**Category**: DevOps
+**Priority**: P1
+**Dependencies**: DEPLOY-003
+**Estimated Effort**: 1 hour
+
+**Description:**
+Create deployment documentation and runbook.
+
+**Acceptance Criteria:**
+- [ ] README updated with:
+  - Setup instructions
+  - Deployment process
+  - Environment variables
+  - Common issues
+- [ ] Runbook created for:
+  - Rollback procedure
+  - Database migrations
+  - Scaling guidelines
+
+---
+
+## TASK EXECUTION ORDER
+
+### Week 1: Backend Foundation
+Day 1: Tasks 1-7 (Backend setup + JWT)
+Day 2: Tasks 8-10 (First 3 endpoints)
+Day 3: Tasks 11-13 (Remaining endpoints)
+Day 4: Tasks 14-15 (App config + tests)
+
+### Week 2: Frontend Foundation
+Day 5: Tasks 16-20 (Frontend setup + API client)
+Day 6: Tasks 21-24 (Core components)
+Day 7: Tasks 25-28 (Auth components + pages)
+Day 8: Tasks 29-30 (Home page + tests)
+
+### Week 3: Integration & Deployment
+Day 9: Tasks 31-34 (Database + integration tests)
+Day 10: Tasks 35-36 (User isolation + performance)
+Day 11: Tasks 37-38 (Deployment)
+Day 12: Tasks 39-40 (Monitoring + docs)
+
+---
+
+## COMPLETION CRITERIA
+
+Phase II is complete when:
+- [ ] All 40 tasks completed
+- [ ] Backend test coverage > 90%
+- [ ] Frontend test coverage > 80%
+- [ ] All integration tests passing
+- [ ] Performance requirements met
+- [ ] Deployed to production
+- [ ] Documentation complete
+
+---
+
+**END OF TASK BREAKDOWN**
+
+Ready for implementation! Start with BACK-001.
+
+**Version:** 1.0.0
+**Date:** 2026-01-01
+**Status:** Ready for Execution

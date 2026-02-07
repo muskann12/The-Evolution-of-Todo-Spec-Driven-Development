@@ -1,0 +1,2501 @@
+# Phase II-III Todo Application - Specification
+
+**Document Type:** Feature Specification (WHAT to build)
+**Phase:** II-III - Full-Stack Web Application with AI Chatbot
+**Version:** 2.0.0
+**Date:** 2026-01-12
+**Status:** Ready for Implementation
+
+---
+
+## 1. OVERVIEW
+
+### Project Description
+Phase II-III builds a full-stack web application with AI-powered chatbot capabilities. Phase II provides traditional web UI with Next.js frontend, FastAPI backend, and Neon PostgreSQL database. Phase III adds conversational AI for natural language task management using OpenAI Agents SDK and Model Context Protocol (MCP) tools.
+
+### Scope
+
+**Phase II Scope (Traditional Web UI):**
+- User authentication system (signup, login, logout)
+- Personal task management (CRUD operations)
+- Multi-user support with data isolation
+- Persistent storage in PostgreSQL
+- Modern web interface with responsive design
+
+**Phase III Scope (AI Chatbot):**
+- Conversational task creation via natural language
+- Conversational task listing and filtering
+- Conversational task completion and updates
+- Conversational task deletion
+- AI agent with 5 MCP tools for task operations
+- Stateless conversation architecture
+- Conversation persistence (messages + conversations tables)
+- Context window management (20 messages default)
+
+### Out of Scope
+- Task sharing between users
+- Team/organization features
+- Task categories or projects
+- Task attachments or comments
+- Mobile native applications
+- Real-time collaboration (beyond chatbot)
+- Advanced filtering or search (beyond AI agent capabilities)
+- Voice input (Phase III+ future enhancement)
+
+### Success Definition
+
+**Phase II Success Criteria:**
+1. Users can sign up and log in securely
+2. Users can create, read, update, and delete their tasks via web UI
+3. All data persists in PostgreSQL database
+4. Users can only see their own tasks (data isolation)
+5. Application is accessible via web browser
+6. All Phase II acceptance criteria are met
+
+**Phase III Success Criteria:**
+1. Users can chat naturally with AI assistant to manage tasks
+2. AI agent understands natural language task requests
+3. AI agent uses 5 MCP tools to perform operations
+4. Conversation history persists across sessions
+5. Stateless architecture (all state in database)
+6. Users can only access their own conversations
+7. AI responses are friendly, helpful, and contextual
+8. All Phase III acceptance criteria are met
+
+---
+
+## 2. USER JOURNEYS
+
+### Journey 1: New User Signup and First Task
+
+**Actor:** Visitor (not logged in)
+
+**Goal:** Create an account and add first task
+
+**Steps:**
+1. User visits the application homepage
+2. User sees landing page with "Sign Up" and "Log In" buttons
+3. User clicks "Sign Up"
+4. User is shown signup form
+5. User enters name (e.g., "John Doe")
+6. User enters email (e.g., "john@example.com")
+7. User enters password (e.g., "securepass123")
+8. User clicks "Create Account" button
+9. System validates input (email format, password length)
+10. System creates user account in database
+11. System hashes password with bcrypt
+12. System generates JWT token
+13. System stores token in httpOnly cookie
+14. User is automatically logged in
+15. User is redirected to task list page (empty state)
+16. User sees message: "No tasks yet. Create your first task!"
+17. User clicks "Add Task" button
+18. User sees task creation form
+19. User enters title: "Buy groceries"
+20. User enters description: "Milk, eggs, bread"
+21. User clicks "Create Task" button
+22. System validates input
+23. System creates task in database (associated with user)
+24. Task appears immediately in the list
+25. User sees success message: "Task created successfully"
+
+**Success Criteria:**
+- ✅ Account created in database with UUID
+- ✅ Password hashed (not stored in plain text)
+- ✅ JWT token issued with 7-day expiry
+- ✅ Token stored in httpOnly cookie (not localStorage)
+- ✅ User_id in token matches database user
+- ✅ Task associated with correct user_id
+- ✅ Task persisted in database
+- ✅ UI updates immediately without page reload
+- ✅ No errors or crashes
+
+**Error Scenarios:**
+- Email already exists → Show error: "Email already registered"
+- Password too short → Show error: "Password must be at least 8 characters"
+- Invalid email format → Show error: "Please enter a valid email address"
+- Network error → Show error: "Network error. Please try again"
+
+---
+
+### Journey 2: Returning User Login and Task Management
+
+**Actor:** Registered user (has account)
+
+**Goal:** Log in and manage existing tasks
+
+**Steps:**
+1. User visits the application homepage
+2. User clicks "Log In"
+3. User is shown login form
+4. User enters email: "john@example.com"
+5. User enters password: "securepass123"
+6. User clicks "Log In" button
+7. System validates credentials
+8. System verifies password hash
+9. System generates new JWT token
+10. System stores token in httpOnly cookie
+11. User is redirected to task list page
+12. User sees their existing tasks (3 tasks)
+13. User sees task #1: "Buy groceries" (incomplete)
+14. User sees task #2: "Finish project" (incomplete)
+15. User sees task #3: "Call dentist" (completed, strikethrough)
+16. User clicks checkbox next to "Buy groceries"
+17. System updates task.completed = true
+18. Task shows checkmark and strikethrough
+19. Updated timestamp is recorded
+20. User hovers over "Finish project" task
+21. User clicks "Delete" icon
+22. System shows confirmation: "Are you sure you want to delete this task?"
+23. User clicks "Yes, delete"
+24. System deletes task from database
+25. Task is removed from list immediately
+26. User sees 2 tasks remaining
+27. User clicks "Log Out"
+28. System clears httpOnly cookie
+29. User is redirected to homepage
+
+**Success Criteria:**
+- ✅ Authentication successful with valid credentials
+- ✅ Only user's own tasks visible (data isolation)
+- ✅ Task completion toggles correctly (true ↔ false)
+- ✅ Task updates persist to database immediately
+- ✅ Deletions are permanent (task removed from DB)
+- ✅ UI stays in sync with backend state
+- ✅ Logout clears authentication token
+- ✅ After logout, protected routes are inaccessible
+
+**Error Scenarios:**
+- Wrong password → Show error: "Invalid email or password"
+- Email not found → Show error: "Invalid email or password" (same message for security)
+- Token expired → Redirect to login page
+- Network error during task update → Show error and don't update UI
+
+---
+
+### Journey 3: Task Editing
+
+**Actor:** Logged-in user
+
+**Goal:** Update task details
+
+**Steps:**
+1. User is logged in and viewing task list
+2. User sees task: "Buy groceries" with description "Milk, eggs, bread"
+3. User clicks "Edit" button on task
+4. Task expands to show edit form
+5. User changes title to "Buy groceries and supplies"
+6. User changes description to "Milk, eggs, bread, toilet paper, soap"
+7. User clicks "Save" button
+8. System validates input (title not empty, within length limits)
+9. System updates task in database
+10. System updates updated_at timestamp
+11. Task collapses back to view mode
+12. User sees updated title and description
+13. User sees success message: "Task updated successfully"
+
+**Success Criteria:**
+- ✅ User can edit title and description
+- ✅ Changes saved immediately to database
+- ✅ Updated_at timestamp is updated
+- ✅ Validation enforced (title required, max lengths)
+- ✅ Cannot edit other users' tasks (403 Forbidden)
+- ✅ UI shows updated values immediately
+
+**Error Scenarios:**
+- Title is empty → Show error: "Title is required"
+- Title exceeds 200 chars → Show error: "Title must be 200 characters or less"
+- Task not found → Show error: "Task not found" (404)
+- Not authorized → Redirect to login (401)
+
+---
+
+### Journey 4: Managing Tasks via AI Chatbot (Phase III)
+
+**Actor:** Logged-in user
+
+**Goal:** Manage tasks through natural language conversation with AI assistant
+
+**Steps:**
+1. User is logged in and navigates to /chat page
+2. User sees chat interface with message history (if any)
+3. User sees empty state: "Hi! I'm your personal todo assistant. Tell me what you need to do!"
+4. User types: "Add a task to buy groceries"
+5. AI agent receives message
+6. AI agent extracts intent: create task
+7. AI agent extracts task details: title="Buy groceries"
+8. AI agent calls `add_task` MCP tool with user_id and title
+9. MCP tool creates task in database
+10. MCP tool returns success with task details
+11. AI agent receives tool result
+12. AI agent stores user message in database (conversations/messages tables)
+13. AI agent stores assistant response in database
+14. AI agent responds: "✅ Created task: Buy groceries. Anything else?"
+15. User sees AI response in chat
+16. User types: "What's on my list?"
+17. AI agent extracts intent: list tasks
+18. AI agent calls `list_tasks` MCP tool with user_id
+19. MCP tool fetches user's tasks from database
+20. MCP tool returns task list
+21. AI agent formats response: "You have 1 task: \n- Buy groceries (pending)"
+22. User sees formatted task list
+23. User types: "Mark it as done"
+24. AI agent understands "it" refers to previous task
+25. AI agent calls `complete_task` MCP tool with user_id and task_id
+26. MCP tool updates task.completed = true in database
+27. AI agent responds: "✅ Marked 'Buy groceries' as complete!"
+28. User refreshes page
+29. Conversation history loads from database
+30. User sees entire conversation preserved
+
+**Success Criteria:**
+- ✅ Natural language task creation works
+- ✅ AI agent correctly extracts task details from conversational text
+- ✅ MCP tools perform operations on correct user's data
+- ✅ Conversation history persists in database
+- ✅ Stateless architecture (each request fetches fresh history)
+- ✅ Context maintained across messages (up to 20 messages)
+- ✅ AI agent provides friendly, conversational responses
+- ✅ Multi-turn conversations work (agent can call multiple tools)
+- ✅ Conversation survives server restart
+- ✅ Users can only access their own conversations
+- ✅ AI agent handles ambiguous requests gracefully
+
+**Error Scenarios:**
+- Ambiguous request → AI asks clarifying question: "What would you like to name this task?"
+- Task not found → AI responds: "I couldn't find that task. Can you be more specific?"
+- Network error → Show error: "Connection error. Please try again."
+- Token expired → Redirect to login with message: "Session expired. Please log in again."
+- Too many tool calls (>5) → AI responds: "I'm having trouble completing that request. Can you simplify?"
+- OpenAI API error → Show error: "AI assistant temporarily unavailable. Try again later."
+
+**Natural Language Examples:**
+- "Add task to finish report by Friday" → AI extracts: title="Finish report", due_date="Friday"
+- "Show me my tasks" → AI calls list_tasks()
+- "Mark the report task as complete" → AI identifies task and calls complete_task()
+- "Delete the grocery task" → AI confirms: "Are you sure you want to delete 'Buy groceries'?"
+- "Update the report title to 'Quarterly Report'" → AI calls update_task()
+- "What high priority tasks do I have?" → AI calls list_tasks(priority="high")
+
+---
+
+## 3. FEATURE REQUIREMENTS
+
+### Feature 1: User Authentication
+
+**Feature ID:** AUTH-001
+
+**User Story:**
+> As a visitor, I want to sign up for an account, so that I can have a personal todo list.
+
+**Business Value:** Enables multi-user application with data isolation
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: User Signup**
+- ✅ User can sign up with name, email, and password
+- ✅ Email must be unique (no duplicates allowed)
+- ✅ Email must be valid format (RFC 5322)
+- ✅ Name must be 2-100 characters
+- ✅ Password must be at least 8 characters
+- ✅ Password is hashed before storage (bcrypt via Better Auth)
+- ✅ JWT token issued on successful signup
+- ✅ User automatically logged in after signup
+- ✅ Token stored in httpOnly cookie (NOT localStorage)
+- ✅ Token expires after 7 days
+- ✅ User redirected to task list page
+
+**AC2: Input Validation**
+- ✅ Email validation: Reject invalid formats
+- ✅ Password validation: Reject passwords < 8 characters
+- ✅ Name validation: Reject empty or too long names
+- ✅ Show specific error messages for each validation failure
+- ✅ Frontend validates before sending request
+- ✅ Backend validates even if frontend bypassed
+
+**AC3: Error Handling**
+- ✅ Duplicate email → 409 Conflict: "Email already registered"
+- ✅ Invalid email → 400 Bad Request: "Invalid email address"
+- ✅ Password too short → 400 Bad Request: "Password must be at least 8 characters"
+- ✅ Missing fields → 400 Bad Request: "All fields are required"
+
+**Technical Requirements:**
+- Use Better Auth library for authentication
+- Enable JWT plugin
+- Configure shared `BETTER_AUTH_SECRET` (min 32 chars)
+- Store token in httpOnly cookie with SameSite=Strict
+- Backend: POST /api/auth/signup endpoint
+- Frontend: Signup form component with validation
+
+---
+
+### Feature 2: User Login
+
+**Feature ID:** AUTH-002
+
+**User Story:**
+> As a registered user, I want to log in with my credentials, so that I can access my todo list.
+
+**Business Value:** Returning users can access their persisted data
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: User Login**
+- ✅ User can log in with email and password
+- ✅ Incorrect credentials show error message
+- ✅ Same error for "email not found" and "wrong password" (security)
+- ✅ JWT token issued on successful login
+- ✅ Token stored in httpOnly cookie
+- ✅ User redirected to task list after login
+- ✅ Login persists across browser sessions (via cookie)
+
+**AC2: Token Management**
+- ✅ Token includes user_id in 'sub' claim
+- ✅ Token includes email and name in payload
+- ✅ Token signed with BETTER_AUTH_SECRET
+- ✅ Token expires in 7 days
+- ✅ Backend verifies token on every protected request
+- ✅ Expired tokens return 401 Unauthorized
+
+**AC3: Session Persistence**
+- ✅ Closing browser preserves login (cookie persists)
+- ✅ Opening new tab preserves login
+- ✅ Token sent automatically with requests (httpOnly cookie)
+
+**Technical Requirements:**
+- Backend: POST /api/auth/login endpoint
+- Frontend: Login form component
+- Password verification using bcrypt hash comparison
+- JWT generation with PyJWT library
+
+---
+
+### Feature 3: User Logout
+
+**Feature ID:** AUTH-003
+
+**User Story:**
+> As a logged-in user, I want to log out, so that I can secure my account on shared devices.
+
+**Business Value:** Security on shared/public computers
+
+**Priority:** P1 (High - Security feature)
+
+**Acceptance Criteria:**
+
+**AC1: Logout Functionality**
+- ✅ User can click "Logout" button
+- ✅ System clears httpOnly cookie
+- ✅ User redirected to homepage/login page
+- ✅ Protected routes become inaccessible
+- ✅ Attempting to access /tasks redirects to /login
+
+**AC2: Session Cleanup**
+- ✅ All client-side state cleared
+- ✅ Token no longer valid for API requests
+- ✅ User must log in again to access data
+
+**Technical Requirements:**
+- Backend: POST /api/auth/logout endpoint
+- Frontend: Logout button in header/nav
+- Clear cookie on backend response
+- Clear client state on frontend
+
+---
+
+### Feature 4: Task Creation
+
+**Feature ID:** TASK-001
+
+**User Story:**
+> As a logged-in user, I want to create a new task, so that I can remember things I need to do.
+
+**Business Value:** Core functionality - users can add items to todo list
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Task Creation Form**
+- ✅ User can add task with title (required)
+- ✅ User can optionally add description
+- ✅ "Add Task" button opens creation form
+- ✅ Form has title input (text field)
+- ✅ Form has description input (textarea)
+- ✅ Form has "Create" button
+
+**AC2: Validation**
+- ✅ Title cannot be empty
+- ✅ Title cannot exceed 200 characters
+- ✅ Description cannot exceed 1000 characters
+- ✅ Show character count for title and description
+- ✅ Show validation errors inline
+
+**AC3: Task Creation**
+- ✅ Task is associated with logged-in user (user_id from JWT)
+- ✅ Task appears immediately in the list (optimistic update)
+- ✅ Task is persisted to database
+- ✅ Created timestamp is recorded (server-side)
+- ✅ Task defaults to completed = false
+- ✅ Task gets auto-generated ID from database
+
+**AC4: UI Feedback**
+- ✅ Loading spinner while creating
+- ✅ Success message on creation
+- ✅ Form resets after creation
+- ✅ Error message on failure
+- ✅ Rollback optimistic update on error
+
+**Technical Requirements:**
+- Backend: POST /api/{user_id}/tasks endpoint
+- Pydantic validation for request body
+- SQLModel Task model with user_id foreign key
+- Return 201 Created with task object
+- JWT token required and verified
+
+---
+
+### Feature 5: Task List View
+
+**Feature ID:** TASK-002
+
+**User Story:**
+> As a logged-in user, I want to see all my tasks, so that I know what I need to do.
+
+**Business Value:** Users can view their complete task inventory
+
+**Priority:** P0 (Critical - MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Task List Display**
+- ✅ User sees only their own tasks (data isolation)
+- ✅ Tasks sorted by created date (newest first)
+- ✅ Each task shows title, description, completion status
+- ✅ Completed tasks visually distinguished (strikethrough text)
+- ✅ Task count shown (e.g., "5 tasks")
+
+**AC2: Empty State**
+- ✅ Empty state message if no tasks: "No tasks yet. Create your first task!"
+- ✅ "Add Task" button prominently displayed
+- ✅ Friendly illustration or icon
+
+**AC3: Loading State**
+- ✅ Loading spinner while fetching tasks
+- ✅ Skeleton screen (optional, for better UX)
+
+**AC4: Task Filtering (Optional)**
+- ✅ Filter by status: "All", "Pending", "Completed"
+- ✅ Default filter: "All"
+- ✅ Filter persists in URL query param
+
+**Technical Requirements:**
+- Backend: GET /api/{user_id}/tasks endpoint
+- Filter by user_id from JWT token (security)
+- Optional status query param: ?status=pending|completed|all
+- Return array of task objects
+- Index on user_id and completed for performance
+
+---
+
+### Feature 6: Task Update
+
+**Feature ID:** TASK-003
+
+**User Story:**
+> As a logged-in user, I want to edit my task, so that I can correct or clarify what I need to do.
+
+**Business Value:** Users can fix mistakes or add details
+
+**Priority:** P1 (High - Expected functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Inline Editing**
+- ✅ User can click "Edit" button on task
+- ✅ Title becomes editable text input
+- ✅ Description becomes editable textarea
+- ✅ "Save" and "Cancel" buttons appear
+- ✅ Cancel reverts changes
+
+**AC2: Saving Changes**
+- ✅ Changes saved immediately on "Save" click
+- ✅ Updated timestamp recorded
+- ✅ Validation same as create (title required, max lengths)
+- ✅ Cannot edit other users' tasks (403 Forbidden)
+- ✅ Error shown if task not found (404 Not Found)
+
+**AC3: Optimistic Update**
+- ✅ UI updates immediately
+- ✅ Rollback on server error
+- ✅ Show error message on failure
+
+**Technical Requirements:**
+- Backend: PUT /api/{user_id}/tasks/{id} endpoint
+- Verify task.user_id matches JWT user_id
+- Update updated_at timestamp automatically
+- Return updated task object
+- 403 Forbidden if user_id mismatch
+
+---
+
+### Feature 7: Task Deletion
+
+**Feature ID:** TASK-004
+
+**User Story:**
+> As a logged-in user, I want to delete a task, so that I can remove tasks I no longer need.
+
+**Business Value:** Users can clean up completed or irrelevant tasks
+
+**Priority:** P1 (High - Expected functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Delete Confirmation**
+- ✅ User can click "Delete" button/icon on task
+- ✅ Confirmation modal appears: "Are you sure you want to delete this task?"
+- ✅ Modal has "Delete" and "Cancel" buttons
+- ✅ Cancel closes modal without deleting
+
+**AC2: Task Deletion**
+- ✅ Task removed from list immediately (optimistic delete)
+- ✅ Task deleted from database
+- ✅ Cannot delete other users' tasks (403 Forbidden)
+- ✅ Error shown if task not found (404 Not Found)
+
+**AC3: Undo Option (Optional Enhancement)**
+- ✅ Show "Undo" toast for 5 seconds after deletion
+- ✅ Undo restores task before permanent deletion
+- ✅ After 5 seconds, deletion is permanent
+
+**Technical Requirements:**
+- Backend: DELETE /api/{user_id}/tasks/{id} endpoint
+- Verify task.user_id matches JWT user_id
+- Return 204 No Content on success
+- Return 404 if task not found
+- Return 403 if user_id mismatch
+
+---
+
+### Feature 8: Mark Task Complete
+
+**Feature ID:** TASK-005
+
+**User Story:**
+> As a logged-in user, I want to mark a task as complete, so that I can track my progress.
+
+**Business Value:** Users can track what's done vs. pending
+
+**Priority:** P0 (Critical - Core functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Toggle Completion**
+- ✅ User can toggle task completion with checkbox
+- ✅ Checking box sets completed = true
+- ✅ Unchecking box sets completed = false
+- ✅ Completed tasks show visual indicator (checkmark icon, strikethrough)
+- ✅ Status change persists immediately to database
+- ✅ Updated timestamp recorded
+
+**AC2: Visual Feedback**
+- ✅ Completed tasks: Strikethrough text, green checkmark
+- ✅ Incomplete tasks: No strikethrough, empty checkbox
+- ✅ Smooth animation on toggle
+- ✅ Optimistic UI update
+
+**AC3: Authorization**
+- ✅ Cannot modify other users' tasks (403 Forbidden)
+- ✅ Error shown if task not found (404 Not Found)
+
+**Technical Requirements:**
+- Backend: PATCH /api/{user_id}/tasks/{id}/complete endpoint
+- Toggle completed boolean (true ↔ false)
+- Update updated_at timestamp
+- Return updated task object
+- Verify user_id match
+
+---
+
+### Feature 9: Conversational Task Creation (Phase III)
+
+**Feature ID:** CHAT-001
+
+**User Story:**
+> As a logged-in user, I want to create tasks by chatting naturally with an AI assistant, so that I can quickly add tasks without filling out forms.
+
+**Business Value:** Natural language interface removes friction from task creation
+
+**Priority:** P0 (Critical - Phase III MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Natural Language Processing**
+- ✅ AI agent understands variations: "add task", "create todo", "I need to", "remind me to"
+- ✅ AI agent extracts task title from conversational text
+- ✅ AI agent extracts optional description if provided
+- ✅ AI agent extracts optional priority if mentioned ("high priority", "urgent")
+- ✅ AI agent extracts optional due date if mentioned ("by Friday", "tomorrow")
+- ✅ AI agent extracts optional tags if mentioned ("tag: work", "#personal")
+
+**AC2: MCP Tool Integration**
+- ✅ AI agent calls `add_task` MCP tool with user_id (from JWT)
+- ✅ AI agent passes extracted parameters to tool
+- ✅ AI agent receives tool response (success/error)
+- ✅ AI agent handles tool failures gracefully
+
+**AC3: Conversational Response**
+- ✅ AI confirms task creation: "✅ Created task: [title]"
+- ✅ AI shows task details (priority, due date if set)
+- ✅ AI asks if user wants to add more details (description, tags)
+- ✅ AI offers next steps: "Anything else I can help with?"
+
+**AC4: Conversation Persistence**
+- ✅ User message stored in messages table
+- ✅ Assistant response stored in messages table
+- ✅ Conversation updated_at timestamp updated
+- ✅ Messages visible on page refresh
+
+**Natural Language Examples:**
+- "Add a task to buy groceries" → title="Buy groceries"
+- "Create high priority task for client presentation tomorrow" → title="Client presentation", priority="high", due_date=tomorrow
+- "I need to finish the quarterly report by Friday" → title="Finish quarterly report", due_date=Friday
+- "Remind me to call the dentist" → title="Call the dentist"
+
+**Technical Requirements:**
+- OpenAI agent with GPT-4o or GPT-4o-mini
+- System prompt with task creation guidelines
+- `add_task` MCP tool registered and accessible
+- Backend: POST /api/chat/message endpoint
+- Conversation service for message persistence
+- User_id from JWT token (never from client)
+
+---
+
+### Feature 10: Conversational Task Listing (Phase III)
+
+**Feature ID:** CHAT-002
+
+**User Story:**
+> As a logged-in user, I want to ask the AI to show me my tasks, so that I can quickly review what I need to do.
+
+**Business Value:** Conversational task retrieval is faster than navigating UI
+
+**Priority:** P0 (Critical - Phase III MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Natural Language Understanding**
+- ✅ AI understands variations: "show my tasks", "what's on my list", "what do I need to do"
+- ✅ AI understands filters: "show pending tasks", "what's high priority", "tasks due today"
+- ✅ AI extracts filter parameters (status, priority, tags, due date)
+- ✅ AI handles vague requests: "what should I work on?" → suggests high priority pending tasks
+
+**AC2: MCP Tool Integration**
+- ✅ AI calls `list_tasks` MCP tool with user_id
+- ✅ AI passes filter parameters if extracted
+- ✅ AI receives task list from tool
+- ✅ AI handles empty list gracefully: "You have no tasks! 🎉"
+
+**AC3: Formatted Response**
+- ✅ AI formats tasks in readable list
+- ✅ AI shows task count: "You have 5 tasks:"
+- ✅ AI indicates completion status (✅ or ⬜)
+- ✅ AI shows priority indicators (🔴 high, 🟡 medium, 🟢 low)
+- ✅ AI shows due dates if set
+- ✅ AI groups by status if many tasks
+
+**AC4: Follow-up Suggestions**
+- ✅ AI offers actions: "Would you like to mark any as complete?"
+- ✅ AI suggests prioritization: "You have 3 high priority tasks. Want to start with those?"
+
+**Natural Language Examples:**
+- "What's on my list?" → Shows all tasks
+- "Show me pending tasks" → Filters by status=pending
+- "What high priority tasks do I have?" → Filters by priority=high
+- "Tasks due today" → Filters by due_date=today
+- "Show me work tasks" → Filters by tag=work
+
+**Technical Requirements:**
+- `list_tasks` MCP tool with filter parameters
+- System prompt with task formatting guidelines
+- Response formatting logic in agent
+- Handling of large task lists (pagination hints)
+
+---
+
+### Feature 11: Conversational Task Completion (Phase III)
+
+**Feature ID:** CHAT-003
+
+**User Story:**
+> As a logged-in user, I want to mark tasks as complete by telling the AI, so that I can quickly update my progress hands-free.
+
+**Business Value:** Voice-friendly task completion for productivity
+
+**Priority:** P0 (Critical - Phase III MVP blocker)
+
+**Acceptance Criteria:**
+
+**AC1: Natural Language Understanding**
+- ✅ AI understands variations: "mark done", "complete task", "I finished", "check off"
+- ✅ AI identifies task by title: "mark 'buy groceries' as done"
+- ✅ AI identifies task by context: "mark it done" (refers to recently mentioned task)
+- ✅ AI handles multiple tasks: "mark all groceries tasks as complete"
+
+**AC2: Task Identification**
+- ✅ AI searches user's tasks for matching title
+- ✅ AI handles fuzzy matching: "mark grocery task done" matches "Buy groceries"
+- ✅ AI disambiguates if multiple matches: "Did you mean 'Buy groceries' or 'Buy groceries and supplies'?"
+- ✅ AI handles task not found: "I couldn't find that task. Can you be more specific?"
+
+**AC3: MCP Tool Integration**
+- ✅ AI calls `complete_task` MCP tool with user_id and task_id
+- ✅ AI receives confirmation from tool
+- ✅ AI handles already completed tasks: "That task is already complete!"
+
+**AC4: Conversational Response**
+- ✅ AI confirms completion: "✅ Marked 'Buy groceries' as complete!"
+- ✅ AI celebrates: "Great job! 🎉"
+- ✅ AI offers next steps: "What's next on your list?"
+- ✅ AI shows remaining task count: "You have 4 tasks left."
+
+**Natural Language Examples:**
+- "Mark buy groceries as done" → Completes specific task
+- "I finished the report" → Finds and completes "Finish report" task
+- "Complete it" → Uses context to complete recently mentioned task
+- "Check off the dentist task" → Completes task with "dentist" in title
+
+**Technical Requirements:**
+- `complete_task` MCP tool
+- Task search/fuzzy matching logic
+- Context tracking (previous task references)
+- System prompt with completion confirmation patterns
+
+---
+
+### Feature 12: Conversational Task Deletion (Phase III)
+
+**Feature ID:** CHAT-004
+
+**User Story:**
+> As a logged-in user, I want to delete tasks by telling the AI, so that I can clean up my task list conversationally.
+
+**Business Value:** Easy task management without clicking through UI
+
+**Priority:** P1 (High - Expected functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Natural Language Understanding**
+- ✅ AI understands variations: "delete task", "remove task", "get rid of", "cancel task"
+- ✅ AI identifies task by title
+- ✅ AI identifies task by context
+- ✅ AI handles bulk deletion: "delete all completed tasks"
+
+**AC2: Confirmation Prompt**
+- ✅ AI ALWAYS asks for confirmation before deleting
+- ✅ AI shows task details: "Are you sure you want to delete 'Buy groceries'?"
+- ✅ AI waits for explicit confirmation: "yes", "confirm", "delete it"
+- ✅ AI cancels on rejection: "no", "cancel", "never mind"
+
+**AC3: MCP Tool Integration**
+- ✅ AI calls `delete_task` MCP tool only after confirmation
+- ✅ AI receives deletion confirmation
+- ✅ AI handles task not found errors
+
+**AC4: Conversational Response**
+- ✅ AI confirms deletion: "✅ Deleted 'Buy groceries'"
+- ✅ AI shows remaining count: "You have 4 tasks left."
+- ✅ AI offers undo (optional): "Let me know if you want to recreate it."
+
+**Natural Language Examples:**
+- "Delete the grocery task" → AI: "Are you sure?" → User: "yes" → Deletes
+- "Remove completed tasks" → AI: "Delete 3 completed tasks?" → User: "yes" → Batch delete
+- "Cancel the dentist task" → AI confirms, then deletes
+- "Get rid of it" → Uses context to find task, confirms, deletes
+
+**Technical Requirements:**
+- `delete_task` MCP tool
+- Confirmation workflow in system prompt
+- Context tracking for "it" references
+- Bulk deletion support (optional)
+
+---
+
+### Feature 13: Conversational Task Update (Phase III)
+
+**Feature ID:** CHAT-005
+
+**User Story:**
+> As a logged-in user, I want to update task details by chatting with the AI, so that I can modify tasks without forms.
+
+**Business Value:** Quick task modifications during conversation
+
+**Priority:** P1 (High - Expected functionality)
+
+**Acceptance Criteria:**
+
+**AC1: Natural Language Understanding**
+- ✅ AI understands variations: "change task", "update task", "edit task", "rename task"
+- ✅ AI extracts field to update: title, description, priority, due date, tags
+- ✅ AI extracts new value
+- ✅ AI handles multiple updates: "change title to X and set priority to high"
+
+**AC2: Task Identification**
+- ✅ AI identifies task by title
+- ✅ AI identifies task by context
+- ✅ AI disambiguates if needed
+
+**AC3: MCP Tool Integration**
+- ✅ AI calls `update_task` MCP tool with user_id, task_id, and changed fields
+- ✅ AI receives updated task object
+- ✅ AI handles validation errors (title too long, etc.)
+
+**AC4: Conversational Response**
+- ✅ AI confirms update: "✅ Updated 'Buy groceries' → title changed to 'Buy groceries and supplies'"
+- ✅ AI shows what changed
+- ✅ AI asks if more changes needed
+
+**Natural Language Examples:**
+- "Change the grocery task title to 'Buy groceries and supplies'" → Updates title
+- "Set the report task to high priority" → Updates priority
+- "Add description 'Q4 metrics' to quarterly report task" → Updates description
+- "Change it to due tomorrow" → Updates due_date using context
+
+**Technical Requirements:**
+- `update_task` MCP tool with partial update support
+- Field extraction logic
+- Validation error handling
+- Context tracking
+
+---
+
+### Feature 14: Conversation Persistence (Phase III)
+
+**Feature ID:** CHAT-006
+
+**User Story:**
+> As a logged-in user, I want my chat history to be saved, so that I can continue conversations across sessions.
+
+**Business Value:** Stateless architecture with persistent conversations
+
+**Priority:** P0 (Critical - Phase III core requirement)
+
+**Acceptance Criteria:**
+
+**AC1: Database Persistence**
+- ✅ Every user message stored in messages table
+- ✅ Every assistant message stored in messages table
+- ✅ Messages linked to conversation via conversation_id
+- ✅ Conversation metadata stored in conversations table
+- ✅ Timestamps recorded for all messages
+
+**AC2: Conversation Retrieval**
+- ✅ On page load, fetch conversation from database
+- ✅ Load last 20 messages by default
+- ✅ Older messages paginated (optional)
+- ✅ Messages displayed in chronological order
+- ✅ User only sees their own conversations (data isolation)
+
+**AC3: Stateless Architecture**
+- ✅ Server maintains NO in-memory conversation state
+- ✅ Each request fetches fresh conversation history from database
+- ✅ Conversation survives server restart
+- ✅ Horizontal scaling possible (any server can handle any request)
+
+**AC4: Context Window Management**
+- ✅ Send last 20 messages to AI agent
+- ✅ Older messages summarized (optional enhancement)
+- ✅ Token usage monitored
+- ✅ Context window limited to prevent token overflow
+
+**AC5: Conversation Lifecycle**
+- ✅ New conversation created on first message
+- ✅ Conversation title auto-generated (first user message or AI summary)
+- ✅ Conversation updated_at timestamp updated on each message
+- ✅ Conversation list sortable by recent activity
+- ✅ User can start new conversation
+
+**AC6: Authorization**
+- ✅ Users can only access their own conversations
+- ✅ Conversation queries filtered by user_id (from JWT)
+- ✅ 403 Forbidden if user tries to access another user's conversation
+
+**Technical Requirements:**
+- conversations table (id, user_id, title, created_at, updated_at, is_active)
+- messages table (id, conversation_id, role, content, created_at)
+- Indexes on user_id and created_at for performance
+- ConversationService for stateless operations
+- GET /api/conversations endpoint (list user's conversations)
+- GET /api/conversations/{id}/messages endpoint (get conversation messages)
+- POST /api/chat/message endpoint (send message, stores in DB)
+
+---
+
+## 4. NON-FUNCTIONAL REQUIREMENTS
+
+### NFR-1: Performance
+
+**Response Times:**
+- ✅ API response time < 200ms (95th percentile)
+- ✅ GET /tasks: < 100ms
+- ✅ POST /tasks: < 150ms
+- ✅ PUT /tasks/{id}: < 150ms
+- ✅ DELETE /tasks/{id}: < 100ms
+
+**Frontend Load Time:**
+- ✅ First Contentful Paint < 1.5 seconds
+- ✅ Time to Interactive < 3 seconds
+- ✅ Lighthouse Performance Score > 90
+
+**Scalability:**
+- ✅ Support 100 concurrent users
+- ✅ Handle 1000 tasks per user
+- ✅ Database queries optimized with indexes
+
+**Measurement:**
+- Use browser DevTools Network tab
+- Use Lighthouse for frontend metrics
+- Use backend logging for API response times
+
+---
+
+### NFR-2: Security
+
+**Authentication Security:**
+- ✅ All API endpoints require valid JWT token (except /auth/signup, /auth/login)
+- ✅ Tokens stored in httpOnly cookies (prevents XSS)
+- ✅ SameSite=Strict (prevents CSRF)
+- ✅ Secure flag in production (HTTPS only)
+
+**Authorization Security:**
+- ✅ User data completely isolated (no cross-user access)
+- ✅ User_id extracted from JWT token only (never from client input)
+- ✅ Database queries filter by user_id
+- ✅ Return 403 Forbidden on user_id mismatch
+
+**Password Security:**
+- ✅ Passwords hashed with bcrypt (cost factor 10)
+- ✅ Passwords never stored in plain text
+- ✅ Passwords never logged or exposed
+- ✅ Better Auth handles password hashing
+
+**Input Validation:**
+- ✅ All inputs validated on backend (never trust client)
+- ✅ SQL injection prevention via SQLModel ORM
+- ✅ XSS prevention via React auto-escaping
+- ✅ Email validation (RFC 5322 format)
+
+**CORS Configuration:**
+- ✅ Allowed origins: http://localhost:3000 (dev), production domain
+- ✅ Credentials allowed: true (for cookies)
+- ✅ Allowed methods: GET, POST, PUT, DELETE, PATCH
+- ✅ Allowed headers: Content-Type, Authorization
+
+**Security Testing:**
+- ✅ No XSS vulnerabilities (use automated scanners)
+- ✅ No SQL injection vulnerabilities
+- ✅ No CSRF vulnerabilities
+- ✅ Token expiry enforced
+- ✅ Authorization checks on all endpoints
+
+---
+
+### NFR-3: Usability
+
+**Responsive Design:**
+- ✅ Mobile-first design approach
+- ✅ Breakpoints: mobile (< 640px), tablet (640-1024px), desktop (> 1024px)
+- ✅ Touch-friendly buttons (min 44x44px)
+- ✅ Readable font sizes on all devices
+
+**Accessibility (WCAG 2.1 AA):**
+- ✅ Keyboard navigation support
+- ✅ Screen reader support (ARIA labels)
+- ✅ Color contrast ratio > 4.5:1
+- ✅ Focus indicators visible
+- ✅ Error messages associated with form fields
+
+**Error Messages:**
+- ✅ Clear, user-friendly language
+- ✅ Actionable (tell user how to fix)
+- ✅ Specific (not generic "Error occurred")
+- ✅ Positioned near relevant UI element
+
+**Loading Indicators:**
+- ✅ Show spinner for async operations
+- ✅ Disable buttons during submission (prevent double-click)
+- ✅ Skeleton screens for list loading (optional)
+
+**Form Validation:**
+- ✅ Inline validation (as user types)
+- ✅ Validation on blur (leaving field)
+- ✅ Validation on submit
+- ✅ Clear error messages
+- ✅ Error state styling (red border, error icon)
+
+---
+
+### NFR-4: Reliability
+
+**Uptime:**
+- ✅ 99.9% uptime target (< 9 hours downtime per year)
+- ✅ Health check endpoint: GET /health
+- ✅ Database connection monitoring
+
+**Error Handling:**
+- ✅ Graceful degradation on errors
+- ✅ User-friendly error messages
+- ✅ Errors logged for debugging
+- ✅ Transaction rollback on failures
+
+**Data Integrity:**
+- ✅ Database constraints enforced (NOT NULL, UNIQUE, FOREIGN KEY)
+- ✅ Transactions for multi-step operations
+- ✅ Validation before writes
+- ✅ Automatic backups (Neon handles this)
+
+**Connection Pooling:**
+- ✅ SQLModel connection pool configured
+- ✅ Pool size: 10 connections
+- ✅ Max overflow: 20 connections
+- ✅ Pool timeout: 30 seconds
+
+---
+
+### NFR-5: Phase III AI Chat Performance
+
+**Chat Response Times:**
+- ✅ Chat message processing < 3 seconds (95th percentile)
+- ✅ Conversation load < 500ms
+- ✅ MCP tool execution < 200ms per tool
+- ✅ Multi-turn conversations (5 iterations) < 10 seconds total
+
+**AI Agent Performance:**
+- ✅ OpenAI API call < 2 seconds
+- ✅ Tool result processing < 100ms
+- ✅ Context window limited to 20 messages (prevents token overflow)
+- ✅ Graceful degradation if OpenAI unavailable
+
+**Database Performance:**
+- ✅ Conversation fetch < 100ms
+- ✅ Message insert < 50ms
+- ✅ Conversation list query < 200ms
+- ✅ Indexes on user_id, conversation_id, created_at
+
+**Measurement:**
+- Monitor OpenAI API latency
+- Log MCP tool execution times
+- Track conversation fetch times
+- Alert on >5 second chat responses
+
+---
+
+### NFR-6: Phase III Stateless Architecture
+
+**Statelessness Requirements:**
+- ✅ NO server-side session storage for conversations
+- ✅ NO in-memory conversation cache
+- ✅ NO global state variables
+- ✅ ALL conversation state in PostgreSQL database
+- ✅ Server restart does NOT lose conversations
+- ✅ Horizontal scaling supported (load balancer compatible)
+
+**Request Independence:**
+- ✅ Each request fetches fresh data from database
+- ✅ User_id from JWT token only (never from session)
+- ✅ Conversation history fetched on every message
+- ✅ No dependencies between requests
+
+**Scalability Benefits:**
+- ✅ Multiple backend instances can run simultaneously
+- ✅ Load balancer can route to any instance
+- ✅ Instance failures don't lose conversation data
+- ✅ Easy cloud deployment (AWS, GCP, Azure)
+
+**Validation:**
+- Test: Restart server mid-conversation, resume seamlessly
+- Test: Send messages to different server instances
+- Test: Conversation persists after server downtime
+- Test: No memory leaks from conversation storage
+
+---
+
+## 5. MCP TOOLS SPECIFICATION (Phase III)
+
+### Overview
+
+The application exposes 5 Model Context Protocol (MCP) tools that the AI agent uses to perform task operations. All tools are **stateless** and accept `user_id` as the first parameter to ensure data isolation.
+
+### Tool Design Principles
+
+**CRITICAL Requirements:**
+1. **Stateless**: Tools MUST NOT maintain state between calls
+2. **user_id First**: EVERY tool MUST accept user_id as first parameter
+3. **Database Filter**: EVERY database query MUST filter by user_id
+4. **Return JSON**: Tools MUST return `Dict[str, Any]`, never arbitrary objects
+5. **Type Hints**: All parameters MUST have type hints
+6. **Clear Descriptions**: Docstrings MUST explain WHEN to use the tool
+7. **Error Handling**: Tools MUST handle errors gracefully and return structured errors
+
+---
+
+### Tool 1: add_task
+
+**Purpose:** Create a new TODO task for the user
+
+**Signature:**
+```python
+@mcp_server.tool()
+async def add_task(
+    user_id: int,                    # ALWAYS first parameter (from JWT)
+    title: str,                      # Required: Task title (max 200 chars)
+    description: str = None,         # Optional: Task description (max 1000 chars)
+    priority: str = "medium",        # Optional: "low", "medium", or "high"
+    tags: List[str] = None,          # Optional: List of tags
+    due_date: str = None             # Optional: ISO date string "YYYY-MM-DD"
+) -> Dict[str, Any]:
+    """
+    Create a new TODO task. Use when user wants to add a task.
+    Examples:
+    - "Add task to buy groceries"
+    - "Create high priority task for client meeting tomorrow"
+    - "I need to finish the report by Friday"
+    """
+```
+
+**Return Value (Success):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "user_id": 42,
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "priority": "medium",
+    "tags": ["shopping"],
+    "due_date": "2026-01-15",
+    "completed": false,
+    "created_at": "2026-01-12T10:30:00Z",
+    "updated_at": "2026-01-12T10:30:00Z"
+  }
+}
+```
+
+**Return Value (Error):**
+```json
+{
+  "success": false,
+  "error": "Title is required",
+  "error_type": "validation_error"
+}
+```
+
+**Validation:**
+- title: Required, 1-200 characters
+- description: Optional, max 1000 characters
+- priority: Must be "low", "medium", or "high"
+- due_date: Must be valid ISO date (YYYY-MM-DD) if provided
+- tags: Max 10 tags per task
+
+---
+
+### Tool 2: list_tasks
+
+**Purpose:** Retrieve user's tasks with optional filters
+
+**Signature:**
+```python
+@mcp_server.tool()
+async def list_tasks(
+    user_id: int,                    # ALWAYS first parameter (from JWT)
+    status: str = None,              # Optional: "pending", "completed", or "all"
+    priority: str = None,            # Optional: "low", "medium", or "high"
+    tags: List[str] = None,          # Optional: Filter by tags
+    limit: int = 20                  # Optional: Max tasks to return (default 20)
+) -> Dict[str, Any]:
+    """
+    Retrieve user's tasks with optional filters. Use when user wants to see their tasks.
+    Examples:
+    - "What's on my list?"
+    - "Show me pending tasks"
+    - "What high priority tasks do I have?"
+    """
+```
+
+**Return Value (Success):**
+```json
+{
+  "success": true,
+  "data": {
+    "tasks": [
+      {
+        "id": 123,
+        "title": "Buy groceries",
+        "description": "Milk, eggs",
+        "priority": "medium",
+        "completed": false,
+        "due_date": "2026-01-15",
+        "created_at": "2026-01-12T10:30:00Z"
+      }
+    ],
+    "count": 1,
+    "filters_applied": {
+      "status": "pending",
+      "priority": null
+    }
+  }
+}
+```
+
+**Return Value (Empty List):**
+```json
+{
+  "success": true,
+  "data": {
+    "tasks": [],
+    "count": 0,
+    "filters_applied": {}
+  }
+}
+```
+
+---
+
+### Tool 3: update_task
+
+**Purpose:** Update an existing task's details
+
+**Signature:**
+```python
+@mcp_server.tool()
+async def update_task(
+    user_id: int,                    # ALWAYS first parameter (from JWT)
+    task_id: int,                    # Required: ID of task to update
+    title: str = None,               # Optional: New title
+    description: str = None,         # Optional: New description
+    status: str = None,              # Optional: "pending" or "completed"
+    priority: str = None             # Optional: "low", "medium", or "high"
+) -> Dict[str, Any]:
+    """
+    Update an existing task. Use when user wants to modify a task.
+    Examples:
+    - "Change the grocery task title to 'Buy groceries and supplies'"
+    - "Set the report task to high priority"
+    """
+```
+
+**Return Value (Success):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "title": "Buy groceries and supplies",
+    "description": "Milk, eggs, bread, toilet paper",
+    "priority": "high",
+    "completed": false,
+    "updated_at": "2026-01-12T11:00:00Z"
+  }
+}
+```
+
+**Return Value (Error - Task Not Found):**
+```json
+{
+  "success": false,
+  "error": "Task not found",
+  "error_type": "not_found"
+}
+```
+
+---
+
+### Tool 4: complete_task
+
+**Purpose:** Mark a task as completed
+
+**Signature:**
+```python
+@mcp_server.tool()
+async def complete_task(
+    user_id: int,                    # ALWAYS first parameter (from JWT)
+    task_id: int                     # Required: ID of task to complete
+) -> Dict[str, Any]:
+    """
+    Mark a task as completed. Use when user indicates they finished a task.
+    Examples:
+    - "Mark buy groceries as done"
+    - "I finished the report"
+    - "Complete it" (with context)
+    """
+```
+
+**Return Value (Success):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "title": "Buy groceries",
+    "completed": true,
+    "updated_at": "2026-01-12T12:00:00Z"
+  }
+}
+```
+
+---
+
+### Tool 5: delete_task
+
+**Purpose:** Permanently delete a task
+
+**Signature:**
+```python
+@mcp_server.tool()
+async def delete_task(
+    user_id: int,                    # ALWAYS first parameter (from JWT)
+    task_id: int                     # Required: ID of task to delete
+) -> Dict[str, Any]:
+    """
+    Delete a task permanently. Use when user confirms they want to delete a task.
+    IMPORTANT: Always ask for confirmation before calling this tool.
+    Examples:
+    - "Delete the grocery task" → Ask: "Are you sure?" → User: "yes" → Call tool
+    """
+```
+
+**Return Value (Success):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 123,
+    "title": "Buy groceries",
+    "deleted": true
+  }
+}
+```
+
+---
+
+### Error Handling Pattern
+
+All tools follow the same error handling pattern:
+
+**Validation Error:**
+```json
+{
+  "success": false,
+  "error": "Title must be between 1 and 200 characters",
+  "error_type": "validation_error"
+}
+```
+
+**Not Found Error:**
+```json
+{
+  "success": false,
+  "error": "Task not found",
+  "error_type": "not_found"
+}
+```
+
+**Authorization Error:**
+```json
+{
+  "success": false,
+  "error": "Task does not belong to user",
+  "error_type": "forbidden"
+}
+```
+
+**Database Error:**
+```json
+{
+  "success": false,
+  "error": "Database connection failed",
+  "error_type": "database_error"
+}
+```
+
+---
+
+## 6. AI AGENT BEHAVIOR SPECIFICATION (Phase III)
+
+### Overview
+
+The AI agent is powered by OpenAI's GPT-4o or GPT-4o-mini and uses the 5 MCP tools to help users manage their tasks through natural language conversation.
+
+### Agent Identity
+
+**Name:** Personal TODO Assistant
+
+**Personality:**
+- Friendly and helpful
+- Concise and action-oriented
+- Professional but not robotic
+- Encouraging for task completion
+- Proactive with suggestions
+
+**Tone:**
+- Conversational (not formal)
+- Supportive (celebrates completions)
+- Clear (confirms actions explicitly)
+- Patient (handles ambiguity gracefully)
+
+---
+
+### System Prompt Requirements
+
+The system prompt MUST include:
+
+1. **Agent Identity:** "You are a personal TODO assistant helping users manage their tasks."
+2. **Available Tools:** List all 5 MCP tools with when to use them
+3. **Personality Guidelines:** Friendly, concise, action-oriented
+4. **Behavioral Rules:**
+   - Always confirm actions clearly
+   - Ask clarifying questions for ambiguous requests
+   - Never delete tasks without confirmation
+   - Celebrate task completions
+   - Offer next steps proactively
+5. **Example Interactions:** Show desired conversation patterns
+6. **Error Handling:** Templates for common error scenarios
+
+---
+
+### Natural Language Understanding Rules
+
+**Intent Recognition:**
+- Extract user's intent from conversational text
+- Handle multiple phrasings for same intent
+- Support implied intents from context
+
+**Common Intents:**
+- **Create**: "add task", "create todo", "I need to", "remind me to"
+- **List**: "show my tasks", "what's on my list", "what do I need to do"
+- **Complete**: "mark done", "finished", "completed", "check off"
+- **Update**: "change task", "update task", "edit task", "rename"
+- **Delete**: "delete task", "remove task", "get rid of"
+
+**Parameter Extraction:**
+- **Title**: Main subject of the task ("buy groceries")
+- **Priority**: "high priority", "urgent", "low priority"
+- **Due Date**: "by Friday", "tomorrow", "next week"
+- **Tags**: "tag: work", "#personal", "work related"
+- **Description**: Additional details beyond title
+
+---
+
+### Tool Usage Patterns
+
+**Single Tool Call:**
+```
+User: "Add task to buy groceries"
+Agent: Calls add_task(user_id=42, title="Buy groceries")
+Agent: "✅ Created task: Buy groceries. Anything else?"
+```
+
+**Multiple Tool Calls (Multi-turn):**
+```
+User: "Show me my tasks and mark the first one done"
+Agent: Calls list_tasks(user_id=42)
+Agent: Identifies first task (id=123)
+Agent: Calls complete_task(user_id=42, task_id=123)
+Agent: "Here are your tasks: [...]. I marked 'Buy groceries' as complete! 🎉"
+```
+
+**Confirmation Required:**
+```
+User: "Delete the grocery task"
+Agent: "Are you sure you want to delete 'Buy groceries'?"
+User: "yes"
+Agent: Calls delete_task(user_id=42, task_id=123)
+Agent: "✅ Deleted 'Buy groceries'. You have 4 tasks left."
+```
+
+---
+
+### Response Format Guidelines
+
+**Task Creation Confirmation:**
+```
+✅ Created task: [Title]
+- Priority: [priority]
+- Due: [date if set]
+
+Anything else I can help with?
+```
+
+**Task List Formatting:**
+```
+You have [N] tasks:
+1. ⬜ Buy groceries (medium priority) - Due today
+2. ⬜ Finish report (high priority) - Due Friday
+3. ✅ Call dentist (completed)
+
+Would you like to mark any as complete?
+```
+
+**Task Completion Confirmation:**
+```
+✅ Marked '[Title]' as complete! Great job! 🎉
+
+You have [N] tasks left. What's next?
+```
+
+**Disambiguation:**
+```
+I found multiple tasks matching "[search]":
+1. Buy groceries
+2. Buy groceries and supplies
+
+Which one did you mean?
+```
+
+**Error Handling:**
+```
+I couldn't find a task matching "[search]".
+Can you be more specific, or would you like to see all your tasks?
+```
+
+---
+
+### Context Tracking
+
+**Conversation Context:**
+- Last 20 messages sent to AI agent
+- Agent maintains context across turns
+- References work: "it", "that task", "the first one"
+
+**Context Resolution:**
+```
+User: "Add task to buy groceries"
+Agent: "✅ Created task: Buy groceries"
+User: "Mark it as done"
+Agent: Understands "it" = "Buy groceries" from context
+Agent: Calls complete_task()
+```
+
+---
+
+### Error Handling Behaviors
+
+**Ambiguous Request:**
+- Don't guess - ask clarifying questions
+- Provide options if available
+- Example: "What would you like to name this task?"
+
+**Task Not Found:**
+- Offer to show all tasks
+- Suggest checking spelling
+- Example: "I couldn't find that task. Would you like to see all your tasks?"
+
+**Tool Failure:**
+- Explain what went wrong in user-friendly language
+- Offer to retry or alternative action
+- Example: "I had trouble creating that task. Let's try again?"
+
+**OpenAI API Error:**
+- Graceful degradation
+- Show user-friendly message
+- Example: "I'm temporarily unavailable. Please try again in a moment."
+
+**Too Many Tool Iterations (>5):**
+- Simplify the request
+- Ask user to break down into smaller steps
+- Example: "That's a complex request. Can we break it down into steps?"
+
+---
+
+## 7. DATA REQUIREMENTS
+
+### User Table
+
+**Table Name:** `users`
+
+**Purpose:** Store user account information (managed by Better Auth)
+
+**Schema:**
+```sql
+CREATE TABLE users (
+    id VARCHAR PRIMARY KEY,           -- UUID string
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+```
+
+**Columns:**
+- `id`: UUID v4 string (primary key)
+- `email`: User's email address (unique, indexed, for login)
+- `name`: User's display name (2-100 characters)
+- `hashed_password`: Bcrypt hash of password (never plain text)
+- `created_at`: Account creation timestamp (UTC)
+
+**Constraints:**
+- Email must be unique
+- Email must be valid format
+- Name cannot be empty
+- Password hash cannot be empty
+
+**Sample Data:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "hashed_password": "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+  "created_at": "2026-01-01T12:00:00Z"
+}
+```
+
+---
+
+### Task Table
+
+**Table Name:** `tasks`
+
+**Purpose:** Store user tasks with completion status
+
+**Schema:**
+```sql
+CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id VARCHAR NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    description VARCHAR(1000),
+    completed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+CREATE INDEX idx_tasks_completed ON tasks(completed);
+CREATE INDEX idx_tasks_created_at ON tasks(created_at);
+```
+
+**Columns:**
+- `id`: Auto-increment integer (primary key)
+- `user_id`: Foreign key to users.id (NOT NULL)
+- `title`: Task title (required, max 200 characters)
+- `description`: Task description (optional, max 1000 characters)
+- `completed`: Completion status (boolean, default false)
+- `created_at`: Creation timestamp (auto-generated, UTC)
+- `updated_at`: Last update timestamp (auto-updated, UTC)
+
+**Constraints:**
+- `user_id` must reference valid user
+- `title` cannot be empty
+- `title` max 200 characters
+- `description` max 1000 characters
+- Cascade delete: Deleting user deletes all their tasks
+
+**Indexes:**
+- `idx_tasks_user_id`: For filtering by user (performance)
+- `idx_tasks_completed`: For filtering by status
+- `idx_tasks_created_at`: For sorting by date
+
+**Sample Data:**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries",
+  "description": "Milk, eggs, bread",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z"
+}
+```
+
+---
+
+### Conversations Table (Phase III)
+
+**Table Name:** `conversations`
+
+**Purpose:** Store conversation metadata for AI chatbot
+
+**Schema:**
+```sql
+CREATE TABLE conversations (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR NOT NULL,
+    title VARCHAR(200),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT fk_conversations_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
+CREATE INDEX idx_conversations_user_active ON conversations(user_id, is_active);
+```
+
+**Columns:**
+- `id`: Auto-increment integer (primary key)
+- `user_id`: Foreign key to users.id (NOT NULL)
+- `title`: Conversation title (optional, max 200 characters, auto-generated from first message)
+- `created_at`: Creation timestamp (auto-generated, UTC)
+- `updated_at`: Last activity timestamp (auto-updated on new messages, UTC)
+- `is_active`: Soft delete flag (boolean, default true)
+
+**Constraints:**
+- `user_id` must reference valid user
+- `title` max 200 characters
+- Cascade delete: Deleting user deletes all their conversations
+
+**Indexes:**
+- `idx_conversations_user_updated`: For fetching user's recent conversations (performance)
+- `idx_conversations_user_active`: For filtering active conversations
+
+**Sample Data:**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Task management session",
+  "created_at": "2026-01-12T10:00:00Z",
+  "updated_at": "2026-01-12T10:15:00Z",
+  "is_active": true
+}
+```
+
+---
+
+### Messages Table (Phase III)
+
+**Table Name:** `messages`
+
+**Purpose:** Store all conversation messages (user, assistant, system, tool)
+
+**Schema:**
+```sql
+CREATE TABLE messages (
+    id SERIAL PRIMARY KEY,
+    conversation_id INTEGER NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_messages_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_messages_conversation_created ON messages(conversation_id, created_at ASC);
+```
+
+**Columns:**
+- `id`: Auto-increment integer (primary key)
+- `conversation_id`: Foreign key to conversations.id (NOT NULL)
+- `role`: Message sender role: "user", "assistant", "system", or "tool" (max 20 chars)
+- `content`: Message text content (TEXT type, no length limit)
+- `created_at`: Message timestamp (auto-generated, UTC)
+
+**Constraints:**
+- `conversation_id` must reference valid conversation
+- `role` must be one of: "user", "assistant", "system", "tool"
+- `content` cannot be empty
+- Cascade delete: Deleting conversation deletes all its messages
+
+**Indexes:**
+- `idx_messages_conversation_created`: For fetching conversation messages chronologically (performance)
+
+**Sample Data:**
+```json
+[
+  {
+    "id": 1,
+    "conversation_id": 1,
+    "role": "user",
+    "content": "Add a task to buy groceries",
+    "created_at": "2026-01-12T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "conversation_id": 1,
+    "role": "assistant",
+    "content": "✅ Created task: Buy groceries. Anything else?",
+    "created_at": "2026-01-12T10:00:02Z"
+  }
+]
+```
+
+**Message Role Descriptions:**
+- **user**: Messages from the end user
+- **assistant**: Messages from the AI agent (responses)
+- **system**: System-generated messages (optional, for context)
+- **tool**: Tool execution results (optional, for debugging)
+
+---
+
+### Relationships
+
+**User → Tasks (One-to-Many):**
+- One user can have many tasks
+- Tasks cannot exist without a user
+- Deleting user deletes all their tasks (CASCADE)
+
+**SQL Relationship:**
+```sql
+ALTER TABLE tasks
+ADD CONSTRAINT fk_tasks_user_id
+FOREIGN KEY (user_id)
+REFERENCES users(id)
+ON DELETE CASCADE;
+```
+
+**SQLModel Relationship:**
+```python
+# In User model
+tasks: list["Task"] = Relationship(back_populates="user", cascade_delete=True)
+
+# In Task model
+user: User = Relationship(back_populates="tasks")
+```
+
+---
+
+**Phase III: User → Conversations (One-to-Many):**
+- One user can have many conversations
+- Conversations cannot exist without a user
+- Deleting user deletes all their conversations (CASCADE)
+
+**SQL Relationship:**
+```sql
+ALTER TABLE conversations
+ADD CONSTRAINT fk_conversations_user_id
+FOREIGN KEY (user_id)
+REFERENCES users(id)
+ON DELETE CASCADE;
+```
+
+**SQLModel Relationship:**
+```python
+# In User model
+conversations: list["Conversation"] = Relationship(back_populates="user", cascade_delete=True)
+
+# In Conversation model
+user: User = Relationship(back_populates="conversations")
+```
+
+---
+
+**Phase III: Conversation → Messages (One-to-Many):**
+- One conversation can have many messages
+- Messages cannot exist without a conversation
+- Deleting conversation deletes all its messages (CASCADE)
+
+**SQL Relationship:**
+```sql
+ALTER TABLE messages
+ADD CONSTRAINT fk_messages_conversation_id
+FOREIGN KEY (conversation_id)
+REFERENCES conversations(id)
+ON DELETE CASCADE;
+```
+
+**SQLModel Relationship:**
+```python
+# In Conversation model
+messages: list["Message"] = Relationship(back_populates="conversation", cascade_delete=True)
+
+# In Message model
+conversation: Conversation = Relationship(back_populates="messages")
+```
+
+---
+
+**Phase III: Complete Relationship Hierarchy:**
+```
+User (1) ─── (N) Tasks
+User (1) ─── (N) Conversations
+Conversation (1) ─── (N) Messages
+```
+
+---
+
+## 8. API CONTRACT
+
+### Base URL
+- Development: `http://localhost:8000`
+- Production: `https://api.yourdomain.com`
+
+### Authentication Pattern
+
+All task endpoints follow this pattern:
+```
+/api/{user_id}/tasks
+```
+
+Where `{user_id}` is the authenticated user's UUID from the JWT token.
+
+**Authorization Rules:**
+1. All requests require: `Authorization: Bearer <jwt_token>` header
+2. Token `user_id` (from 'sub' claim) must match URL `{user_id}`
+3. Return 401 Unauthorized if token invalid/missing/expired
+4. Return 403 Forbidden if `user_id` mismatch
+
+---
+
+### Endpoint 1: List Tasks
+
+**GET** `/api/{user_id}/tasks`
+
+**Description:** Retrieve all tasks for the authenticated user
+
+**Authorization:** Required (JWT token)
+
+**Query Parameters:**
+- `status` (optional): Filter by completion status
+  - Values: `all` (default), `pending`, `completed`
+
+**Request:**
+```http
+GET /api/550e8400-e29b-41d4-a716-446655440000/tasks?status=all HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": 1,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "completed": false,
+    "created_at": "2026-01-01T12:00:00Z",
+    "updated_at": "2026-01-01T12:00:00Z"
+  },
+  {
+    "id": 2,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Finish project",
+    "description": null,
+    "completed": true,
+    "created_at": "2026-01-01T10:00:00Z",
+    "updated_at": "2026-01-01T14:00:00Z"
+  }
+]
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+
+---
+
+### Endpoint 2: Create Task
+
+**POST** `/api/{user_id}/tasks`
+
+**Description:** Create a new task for the authenticated user
+
+**Authorization:** Required (JWT token)
+
+**Request Body:**
+```json
+{
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints"
+}
+```
+
+**Validation:**
+- `title`: Required, max 200 characters
+- `description`: Optional, max 1000 characters
+
+**Request:**
+```http
+POST /api/550e8400-e29b-41d4-a716-446655440000/tasks HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": 3,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Write tests",
+  "description": "Unit tests for auth endpoints",
+  "completed": false,
+  "created_at": "2026-01-01T15:00:00Z",
+  "updated_at": "2026-01-01T15:00:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation error (title empty, too long, etc.)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+
+---
+
+### Endpoint 3: Get Task
+
+**GET** `/api/{user_id}/tasks/{id}`
+
+**Description:** Retrieve a specific task by ID
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Request:**
+```http
+GET /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries",
+  "description": "Milk, eggs, bread",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Endpoint 4: Update Task
+
+**PUT** `/api/{user_id}/tasks/{id}`
+
+**Description:** Update all fields of a specific task
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Request Body:**
+```json
+{
+  "title": "Buy groceries and supplies",
+  "description": "Milk, eggs, bread, toilet paper",
+  "completed": false
+}
+```
+
+**Request:**
+```http
+PUT /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "title": "Buy groceries and supplies",
+  "description": "Milk, eggs, bread, toilet paper",
+  "completed": false
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries and supplies",
+  "description": "Milk, eggs, bread, toilet paper",
+  "completed": false,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T16:00:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Validation error
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Endpoint 5: Delete Task
+
+**DELETE** `/api/{user_id}/tasks/{id}`
+
+**Description:** Delete a specific task
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Request:**
+```http
+DELETE /api/550e8400-e29b-41d4-a716-446655440000/tasks/1 HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (204 No Content):**
+```
+(empty response body)
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Endpoint 6: Toggle Task Completion
+
+**PATCH** `/api/{user_id}/tasks/{id}/complete`
+
+**Description:** Toggle the completion status of a specific task
+
+**Authorization:** Required (JWT token, task must belong to user)
+
+**Behavior:**
+- If `completed` is `false`, set to `true`
+- If `completed` is `true`, set to `false`
+- Update `updated_at` timestamp
+
+**Request:**
+```http
+PATCH /api/550e8400-e29b-41d4-a716-446655440000/tasks/1/complete HTTP/1.1
+Host: localhost:8000
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": 1,
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Buy groceries",
+  "description": "Milk, eggs, bread",
+  "completed": true,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T17:00:00Z"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: URL user_id doesn't match token user_id
+- `404 Not Found`: Task doesn't exist or doesn't belong to user
+
+---
+
+### Error Response Format
+
+All error responses follow this consistent format:
+
+**Single Error:**
+```json
+{
+  "detail": "Error message here"
+}
+```
+
+**Validation Error (Multiple Fields):**
+```json
+{
+  "detail": [
+    {
+      "loc": ["body", "title"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    },
+    {
+      "loc": ["body", "description"],
+      "msg": "ensure this value has at most 1000 characters",
+      "type": "value_error.any_str.max_length"
+    }
+  ]
+}
+```
+
+**HTTP Status Codes:**
+- `200 OK`: Successful GET, PUT, PATCH
+- `201 Created`: Successful POST
+- `204 No Content`: Successful DELETE
+- `400 Bad Request`: Invalid input data (validation error)
+- `401 Unauthorized`: Missing, invalid, or expired JWT token
+- `403 Forbidden`: Valid token but insufficient permissions (user_id mismatch)
+- `404 Not Found`: Resource doesn't exist
+- `409 Conflict`: Duplicate resource (e.g., email already exists)
+- `500 Internal Server Error`: Server error (should be rare)
+
+---
+
+## 7. ACCEPTANCE TESTING
+
+### Test Case 1: Signup Flow
+
+**Preconditions:** None (user not registered)
+
+**Steps:**
+1. Navigate to homepage
+2. Click "Sign Up"
+3. Enter name: "Test User"
+4. Enter email: "test@example.com"
+5. Enter password: "password123"
+6. Click "Create Account"
+
+**Expected Results:**
+- ✅ User account created in database
+- ✅ JWT token issued and stored in httpOnly cookie
+- ✅ User redirected to /tasks (empty state)
+- ✅ Email "test@example.com" cannot be used again (unique constraint)
+
+---
+
+### Test Case 2: Login Flow
+
+**Preconditions:** User exists (email: "test@example.com", password: "password123")
+
+**Steps:**
+1. Navigate to homepage
+2. Click "Log In"
+3. Enter email: "test@example.com"
+4. Enter password: "password123"
+5. Click "Log In"
+
+**Expected Results:**
+- ✅ JWT token issued and stored in httpOnly cookie
+- ✅ User redirected to /tasks
+- ✅ User sees their existing tasks
+
+---
+
+### Test Case 3: Create Task
+
+**Preconditions:** User is logged in
+
+**Steps:**
+1. On /tasks page
+2. Click "Add Task"
+3. Enter title: "Test Task"
+4. Enter description: "This is a test"
+5. Click "Create"
+
+**Expected Results:**
+- ✅ Task appears immediately in the list
+- ✅ Task persisted to database with user_id
+- ✅ Task has completed = false
+- ✅ created_at and updated_at timestamps set
+
+---
+
+### Test Case 4: Toggle Completion
+
+**Preconditions:** User is logged in, task exists
+
+**Steps:**
+1. On /tasks page with at least one task
+2. Click checkbox next to task
+
+**Expected Results:**
+- ✅ Task completed status toggles (false → true or true → false)
+- ✅ UI updates immediately (strikethrough if completed)
+- ✅ Database updated
+- ✅ updated_at timestamp updated
+
+---
+
+### Test Case 5: Delete Task
+
+**Preconditions:** User is logged in, task exists
+
+**Steps:**
+1. On /tasks page with at least one task
+2. Click "Delete" icon on task
+3. Confirm deletion in modal
+
+**Expected Results:**
+- ✅ Task removed from list immediately
+- ✅ Task deleted from database
+- ✅ Task no longer accessible via API
+
+---
+
+### Test Case 6: Data Isolation
+
+**Preconditions:** Two users exist (User A, User B), each with tasks
+
+**Steps:**
+1. Log in as User A
+2. Note task count and IDs
+3. Log out
+4. Log in as User B
+5. Note task count and IDs
+
+**Expected Results:**
+- ✅ User A sees only their tasks
+- ✅ User B sees only their tasks
+- ✅ No overlap in tasks between users
+- ✅ Attempting to access User A's task as User B returns 403 Forbidden
+
+---
+
+## 8. DEPENDENCIES
+
+### Frontend Dependencies
+- Next.js 16+ (React framework)
+- React 19+ (UI library)
+- TypeScript 5+ (Type safety)
+- Tailwind CSS 4+ (Styling)
+- Better Auth (Authentication)
+- React Query / TanStack Query (Data fetching)
+
+### Backend Dependencies
+- Python 3.13+ (Programming language)
+- FastAPI (Web framework)
+- SQLModel (ORM)
+- Pydantic v2 (Validation)
+- asyncpg (PostgreSQL driver)
+- Alembic (Database migrations)
+- PyJWT (JWT tokens)
+- python-multipart (Form data)
+- passlib[bcrypt] (Password hashing)
+
+### Infrastructure
+- Neon Serverless PostgreSQL (Database)
+- Vercel or similar (Frontend deployment)
+- Render/Railway or similar (Backend deployment)
+
+---
+
+## 9. CONSTRAINTS
+
+### Technical Constraints
+- Must use Next.js 16+ App Router (no Pages Router)
+- Must use Better Auth (no custom auth implementation)
+- Must use SQLModel (no raw SQL or other ORMs)
+- Must use Neon PostgreSQL (no other databases)
+- Must use JWT tokens stored in httpOnly cookies (no localStorage)
+
+### Security Constraints
+- Passwords must never be stored in plain text
+- User_id must always come from JWT token (never from client input)
+- All API endpoints must verify JWT token (except auth endpoints)
+- Users must only access their own data (strict isolation)
+
+### Performance Constraints
+- API response time must be < 200ms (95th percentile)
+- Frontend must load in < 3 seconds
+- Must support at least 100 concurrent users
+
+### Time Constraints
+- Phase II must be completed within allocated timeframe
+- No gold-plating or scope creep
+- Focus on MVP features only
+
+---
+
+## 10. SUCCESS METRICS
+
+### Functional Metrics
+- ✅ All 8 features implemented and working
+- ✅ All acceptance criteria met
+- ✅ All user journeys completable
+- ✅ All 6 API endpoints functional
+- ✅ 100% of test cases passing
+
+### Quality Metrics
+- ✅ Backend test coverage > 90%
+- ✅ Frontend test coverage > 80%
+- ✅ Zero critical security vulnerabilities
+- ✅ Lighthouse score > 90
+- ✅ mypy --strict passing (backend)
+- ✅ TypeScript strict mode passing (frontend)
+
+### Performance Metrics
+- ✅ API response time < 200ms (95th percentile)
+- ✅ First Contentful Paint < 1.5s
+- ✅ Time to Interactive < 3s
+- ✅ Support 100 concurrent users without degradation
+
+### User Experience Metrics
+- ✅ Zero authentication failures with valid credentials
+- ✅ Task operations complete in < 1 second (perceived)
+- ✅ Error messages clear and actionable
+- ✅ No data loss scenarios
+
+---
+
+## APPENDIX A: GLOSSARY
+
+**JWT (JSON Web Token):** A standard for creating access tokens that assert claims (like user identity).
+
+**httpOnly Cookie:** A cookie that cannot be accessed via JavaScript (prevents XSS attacks).
+
+**SameSite:** Cookie attribute that prevents CSRF attacks by controlling when cookies are sent.
+
+**Better Auth:** Third-party authentication library that handles password hashing and user management.
+
+**SQLModel:** ORM that combines SQLAlchemy and Pydantic for type-safe database operations.
+
+**Neon:** Serverless PostgreSQL platform with auto-scaling and branching.
+
+**Optimistic Update:** Updating UI immediately before server confirms the change (better UX).
+
+**Data Isolation:** Ensuring users can only access their own data (multi-tenancy).
+
+**WCAG 2.1 AA:** Web Content Accessibility Guidelines Level AA compliance.
+
+---
+
+## APPENDIX B: REFERENCES
+
+**Related Documents:**
+- `speckit.constitution` - Architectural principles and standards
+- `@specs/features/user-authentication.md` - Detailed auth spec
+- `@specs/api/auth-endpoints.md` - Auth API details
+- `@specs/api/todos-endpoints.md` - Task API details
+- `@specs/database/schema.md` - Database schema
+
+**External Resources:**
+- Next.js Documentation: https://nextjs.org/docs
+- FastAPI Documentation: https://fastapi.tiangolo.com/
+- Better Auth Documentation: https://www.better-auth.com/
+- SQLModel Documentation: https://sqlmodel.tiangolo.com/
+- Neon Documentation: https://neon.tech/docs
+- OpenAI Agents SDK: https://github.com/openai/swarm
+- OpenAI API Documentation: https://platform.openai.com/docs
+- Model Context Protocol: https://modelcontextprotocol.io/
+- OpenAI ChatKit: https://github.com/openai/openai-chatkit
+
+---
+
+**END OF SPECIFICATION**
+
+This document defines WHAT needs to be built for Phase II-III.
+Phase II provides traditional web UI for task management.
+Phase III adds AI-powered conversational interface using OpenAI Agents SDK and MCP tools.
+
+Implementation details (HOW) will be defined in the plan document.
+
+**Version:** 2.0.0
+**Date:** 2026-01-12
+**Status:** Ready for Planning
+**Next Step:** Create Phase II-III implementation plan (sp.plan)
