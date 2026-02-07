@@ -1,0 +1,102 @@
+# ===================================
+# MONO REPO - Hackathon II TODO App
+# ===================================
+
+# Python (Phase 1, 2, 3)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv
+venv/
+ENV/
+env/
+
+# UV Package Manager
+.uv/
+uv.lock
+
+# Node.js / JavaScript (Phase 2 - Web App)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.npm
+.yarn
+
+# Build outputs (Phase 2 - Web App)
+dist/
+build/
+.next/
+out/
+
+# Environment files (All Phases)
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Docker (Phase 4 - Kubernetes)
+*.log
+docker-compose.override.yml
+
+# Terraform (Phase 5 - Cloud Deployment)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
+
+# AI Models (Phase 3 - AI Chatbot)
+*.pkl
+*.h5
+*.model
+models/downloads/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+tmpclaude-*
